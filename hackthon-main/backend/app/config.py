@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     amadeus_client_secret: str | None = None
     amadeus_env: str = "test"
 
+    # Gemini — powers the Planner/Executor/Supervisor agents. Get a free key
+    # at https://aistudio.google.com/apikey. Free tier: 15 rpm, 1M tokens/day.
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
+
+    # OpenTripPlanner — Executor Agent queries this for ground-transit polylines
+    # + stoptime cross-reference. Default: Digitransit's free public Finland
+    # instance. For other regions, set OTP_GRAPHQL_URL to your own OTP + adjust
+    # the coverage bbox in services/otp.py.
+    otp_graphql_url: str | None = "https://api.digitransit.fi/routing/v2/finland/gtfs/v1"
+    otp_client_name: str = "voyager-hackathon"
+    otp_subscription_key: str | None = None   # optional Digitransit API key
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors(cls, v):

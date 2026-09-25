@@ -11,7 +11,9 @@ import {
   Heart,
   Bell,
   Sparkles,
+  Bot,
   User,
+  UserCheck,
   CreditCard,
   Settings,
   Plane,
@@ -20,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 const mainLinks = [
   { href: "/dashboard/home", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/copilot", label: "AI Co-Pilot", icon: Bot },
   { href: "/onboarding", label: "Create New Trip", icon: PlusCircle },
   { href: "/dashboard/trips", label: "My Trips", icon: Map },
   { href: "/discover", label: "Explore Destinations", icon: Compass },
@@ -31,6 +34,7 @@ const mainLinks = [
 
 const accountLinks = [
   { href: "/dashboard/profile", label: "Profile", icon: User },
+  { href: "/guides/dashboard", label: "Guide Portal", icon: UserCheck },
   { href: "/dashboard/payment-methods", label: "Payment Methods", icon: CreditCard },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

@@ -39,3 +39,22 @@ from app.models.graph import (  # noqa: F401
     RecoveryPlan,
     RefundClass,
 )
+from app.models.super_trip import (  # noqa: F401
+    SuperTripRecord,
+    SuperTripStatus,
+)
+from app.models.disruption import (  # noqa: F401
+    SuperDisruption,
+    SuperDisruptionKind,
+    SuperDisruptionStatus,
+)
+from app.models.payment import (  # noqa: F401
+    PaymentStatus as SuperTripPaymentStatus,
+    SuperTripPayment,
+)
+from app.models.guide import (  # noqa: F401
+    Guide,
+    GuideBooking,
+    GuideBookingStatus,
+    GuideStatus,
+)

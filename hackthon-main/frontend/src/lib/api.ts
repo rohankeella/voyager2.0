@@ -1008,3 +1008,534 @@ export function subscribeToUpdates(onEvent: (event: unknown) => void): () => voi
   };
   return () => source.close();
 }
+
+// ---- DTO-P3: agent-planned SuperTrip DAG -----------------------------------
+
+export type SuperTripNodeType =
+  | "amadeus_flight_order"
+  | "amadeus_flight_offer"
+  | "amadeus_hotel_booking"
+  | "amadeus_hotel_offer"
+  | "otp_ground_transfer"
+  | "activity"
+  | "guide_session"
+  | "meal"
+  | "custom";
+
+export type SuperTripNodeStatus =
+  | "pending"
+  | "confirmed"
+  | "active"
+  | "at_risk"
+  | "completed"
+  | "disrupted"
+  | "cancelled"
+  | "replaced";
+
+export type SuperTripStatus =
+  | "draft"
+  | "pending_review"
+  | "active"
+  | "completed"
+  | "cancelled";
+
+export type SuperTripPersistedStatus =
+  | "draft"
+  | "pending_review"
+  | "approved"
+  | "active"
+  | "completed"
+  | "cancelled";
+
+export type PaymentStatus =
+  | "unpaid"
+  | "escrowed"
+  | "routed"
+  | "refunded"
+  | "failed";
+
+export type NodeExecutionData = {
+  start_time?: string | null;
+  end_time?: string | null;
+  location_label?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  route_geometry?: string | null;
+  pnr_number?: string | null;
+  // permissive extra — populated for flights/hotels/etc.
+  [key: string]: unknown;
+};
+
+export type NodeFinancials = {
+  cost_usd: number;
+  payment_status: PaymentStatus;
+  vendor_account?: string | null;
+  razorpay_transfer_id?: string | null;
+};
+
+export type TripNode = {
+  node_id: string;
+  type: SuperTripNodeType;
+  status: SuperTripNodeStatus;
+  execution_data: NodeExecutionData;
+  depends_on: string[];
+  financials: NodeFinancials;
+  title?: string | null;
+  description?: string | null;
+  requires_approval?: boolean;
+};
+
+export type GlobalConstraints = {
+  max_budget_usd: number;
+  start_date: string;
+  end_date: string;
+  home_location?: string | null;
+  traveler_count?: number;
+  preferences?: Record<string, unknown>;
+};
+
+export type SuperTrip = {
+  super_trip_id: string;
+  traveler_id: string;
+  status: SuperTripStatus;
+  global_constraints: GlobalConstraints;
+  nodes: TripNode[];
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type AgentTraceEntry = Record<string, unknown> & { agent?: string };
+
+export type PlanTripResponse = {
+  trip: SuperTrip | null;
+  hitl_required: boolean;
+  hitl_reason: string | null;
+  errors: string[];
+  warnings: string[];
+  iterations: number;
+  trace: AgentTraceEntry[];
+  persisted_id: string | null;
+  persisted_status: string | null;
+};
+
+export type PlanTripRequest = {
+  user_goal: string;
+  traveler_id?: string;
+  constraints_hint?: Record<string, unknown>;
+  max_iterations?: number;
+  persist?: boolean;
+};
+
+export const agentsApi = {
+  status: () =>
+    request<{
+      gemini_configured: boolean;
+      gemini_model: string | null;
+      amadeus_configured: boolean;
+      note: string;
+    }>("/api/agents/status"),
+
+  planTrip: (payload: PlanTripRequest) =>
+    request<PlanTripResponse>("/api/agents/plan-trip", { method: "POST", body: payload }),
+};
+
+// ---- DTO-P3: persisted SuperTrips -------------------------------------------
+
+export type SuperTripSummary = {
+  id: string;
+  traveler_id: string;
+  title: string;
+  status: SuperTripPersistedStatus;
+  total_cost_usd: number;
+  max_budget_usd: number;
+  node_count: number;
+  created_at: string;
+  updated_at: string;
+  approved_at: string | null;
+};
+
+export type SuperTripDetail = SuperTripSummary & {
+  payload_json: SuperTrip;
+  source_prompt: string | null;
+  agent_trace: AgentTraceEntry[];
+};
+
+export const superTripsApi = {
+  create: (payload: {
+    payload: SuperTrip;
+    title?: string;
+    source_prompt?: string;
+    agent_trace?: AgentTraceEntry[];
+  }) => request<SuperTripDetail>("/api/super-trips", { method: "POST", body: payload }),
+
+  list: () => request<SuperTripSummary[]>("/api/super-trips"),
+
+  get: (id: string) => request<SuperTripDetail>(`/api/super-trips/${encodeURIComponent(id)}`),
+
+  approve: (id: string) =>
+    request<SuperTripDetail>(`/api/super-trips/${encodeURIComponent(id)}/approve`, {
+      method: "POST",
+    }),
+
+  remove: (id: string) =>
+    request<void>(`/api/super-trips/${encodeURIComponent(id)}`, { method: "DELETE" }),
+};
+
+// ---- DTO-P3 Phase 4: Operator Command Center -------------------------------
+
+export type StatusLight = "green" | "yellow" | "red" | "grey";
+
+export type GanttNode = {
+  node_id: string;
+  type: SuperTripNodeType;
+  title: string;
+  status: SuperTripNodeStatus;
+  start_time: string | null;
+  end_time: string | null;
+  location_label: string | null;
+  cost_usd: number;
+  vendor_account: string;
+  payment_status: PaymentStatus;
+  status_light: StatusLight;
+  status_reason: string;
+  buffer_mins: number | null;
+  depends_on: string[];
+};
+
+export type GanttTrip = {
+  super_trip_id: string;
+  traveler_id: string;
+  title: string;
+  status: SuperTripPersistedStatus;
+  total_cost_usd: number;
+  max_budget_usd: number;
+  node_count: number;
+  created_at: string;
+  approved_at: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  home_location: string | null;
+  lights: Record<StatusLight, number>;
+  nodes: GanttNode[];
+};
+
+export type VendorMatrixRow = {
+  vendor_account: string;
+  node_count: number;
+  total_usd: number;
+  routed_usd: number;
+  settled_ratio: number;
+  types: Record<string, number>;
+  payment_status: Record<string, number>;
+};
+
+export type CommandCenterResponse = {
+  generated_at: string;
+  active_trip_count: number;
+  lights_summary: Record<StatusLight, number>;
+  active_trips: GanttTrip[];
+  vendor_matrix: VendorMatrixRow[];
+  disruption_queue: DisruptionQueueItem[];
+};
+
+export const operatorApi = {
+  commandCenter: () => request<CommandCenterResponse>("/api/operator/command-center"),
+};
+
+// ---- DTO-P3 Phase 5: Disruption Engine -------------------------------------
+
+export type SuperDisruptionKind =
+  | "delay"
+  | "cancellation"
+  | "weather"
+  | "overbooked"
+  | "capacity"
+  | "other";
+
+export type SuperDisruptionStatus = "open" | "mitigated" | "resolved" | "ignored";
+
+export type RecoveryAction = {
+  action: string;
+  node_id: string;
+  detail: string;
+  monetary_penalty: number;
+};
+
+export type RecoveryPlan = {
+  plan_id: string;         // "fastest" | "cheapest" | "least_impact"
+  label: string;
+  summary: string;
+  actions: RecoveryAction[];
+  cost_delta_usd: number;
+  time_delta_mins: number;
+  nodes_modified: number;
+  nodes_cancelled: number;
+  nodes_kept: number;
+};
+
+export type SuperTripDisruption = {
+  id: string;
+  super_trip_id: string;
+  node_id: string;
+  kind: SuperDisruptionKind;
+  status: SuperDisruptionStatus;
+  delta_mins: number;
+  note: string | null;
+  source: string;
+  applied_plan_id: string | null;
+  plans: RecoveryPlan[];
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export type DisruptionQueueItem = {
+  id: string;
+  super_trip_id: string;
+  trip_title: string;
+  node_id: string;
+  kind: SuperDisruptionKind;
+  delta_mins: number;
+  note: string | null;
+  source: string;
+  created_at: string;
+  plans: RecoveryPlan[];
+};
+
+// ---- DTO-P3 Phase 6: Razorpay Route split payments -------------------------
+
+export type SuperTripPaymentStatus =
+  | "pending"
+  | "captured"
+  | "partially_refunded"
+  | "refunded"
+  | "failed"
+  | "cancelled";
+
+export type PaymentTransfer = {
+  transfer_id: string;
+  account: string;
+  amount_usd: number;
+  percent_of_total: number;
+  purpose: string;      // flight / hotel / activity / meal / guide / ground_transit / platform_commission
+  node_ids: string[];
+  status: string;       // pending / routed / on_hold
+  on_hold: boolean;
+  routed_at?: string | null;
+};
+
+export type PaymentRefund = {
+  refund_id: string;
+  payment_id: string;
+  node_id: string;
+  vendor_account: string | null;
+  amount_usd: number;
+  reason: string;
+  status: string;
+  created_at: string;
+};
+
+export type SuperTripPayment = {
+  id: string;
+  super_trip_id: string;
+  status: SuperTripPaymentStatus;
+  total_usd: number;
+  refunded_usd: number;
+  razorpay_order_id: string;
+  razorpay_payment_id: string | null;
+  transfers: PaymentTransfer[];
+  refunds: PaymentRefund[];
+  created_at: string;
+  captured_at: string | null;
+  updated_at: string;
+};
+
+// ---- DTO-P3 Phase 7: Guide Marketplace -------------------------------------
+
+export type GuideStatus = "active" | "paused" | "offline";
+export type GuideBookingStatus =
+  | "requested"
+  | "confirmed"
+  | "declined"
+  | "cancelled"
+  | "completed";
+
+export type GuideProfile = {
+  id: string;
+  user_id: string;
+  display_name: string;
+  headline: string | null;
+  bio: string | null;
+  home_lat: number;
+  home_lng: number;
+  home_city: string | null;
+  country_code: string | null;
+  radius_km: number;
+  tags: string[];
+  languages: string[];
+  hourly_rate_usd: number;
+  min_hours: number;
+  vendor_account: string;
+  rating: number | null;
+  review_count: number;
+  verified: boolean;
+  status: GuideStatus;
+};
+
+export type GuideSearchHit = GuideProfile & {
+  distance_km: number | null;
+  matched_tags: string[];
+  conflicts: boolean;
+};
+
+export type GuideProfileInput = {
+  display_name: string;
+  headline?: string | null;
+  bio?: string | null;
+  home_lat: number;
+  home_lng: number;
+  home_city?: string | null;
+  country_code?: string | null;
+  radius_km?: number;
+  tags?: string[];
+  languages?: string[];
+  hourly_rate_usd?: number;
+  min_hours?: number;
+  status?: GuideStatus;
+};
+
+export type GuideBooking = {
+  id: string;
+  guide_id: string;
+  traveler_user_id: string | null;
+  super_trip_id: string | null;
+  node_id: string | null;
+  title: string;
+  location_label: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  start_at: string;
+  end_at: string;
+  rate_usd: number;
+  total_usd: number;
+  tags: string[];
+  status: GuideBookingStatus;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+  responded_at: string | null;
+};
+
+export type GuideBookingRequest = {
+  start_at: string;
+  end_at: string;
+  title: string;
+  location_label?: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  super_trip_id?: string | null;
+  node_id?: string | null;
+  tags?: string[];
+  note?: string;
+};
+
+export const guidesApi = {
+  upsertMe: (payload: GuideProfileInput) =>
+    request<GuideProfile>("/api/guides", { method: "POST", body: payload }),
+
+  getMe: () => request<GuideProfile>("/api/guides/me"),
+
+  search: (params: {
+    lat?: number;
+    lng?: number;
+    tags?: string[];
+    maxDistanceKm?: number;
+    availableFrom?: string;
+    availableTo?: string;
+    limit?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params.lat !== undefined) q.set("lat", String(params.lat));
+    if (params.lng !== undefined) q.set("lng", String(params.lng));
+    if (params.tags && params.tags.length) q.set("tags", params.tags.join(","));
+    if (params.maxDistanceKm) q.set("max_distance_km", String(params.maxDistanceKm));
+    if (params.availableFrom) q.set("from", params.availableFrom);
+    if (params.availableTo) q.set("to", params.availableTo);
+    if (params.limit) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return request<GuideSearchHit[]>(`/api/guides${qs ? `?${qs}` : ""}`);
+  },
+
+  book: (guideId: string, body: GuideBookingRequest) =>
+    request<GuideBooking>(`/api/guides/${encodeURIComponent(guideId)}/bookings`, {
+      method: "POST",
+      body,
+    }),
+
+  myBookings: (status?: GuideBookingStatus) => {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request<GuideBooking[]>(`/api/guides/me/bookings${qs}`);
+  },
+
+  accept: (bookingId: string) =>
+    request<GuideBooking>(`/api/guides/me/bookings/${encodeURIComponent(bookingId)}/accept`, {
+      method: "POST",
+    }),
+
+  decline: (bookingId: string, reason?: string) =>
+    request<GuideBooking>(`/api/guides/me/bookings/${encodeURIComponent(bookingId)}/decline`, {
+      method: "POST",
+      body: { reason },
+    }),
+};
+
+export const paymentsApi = {
+  checkout: (superTripId: string) =>
+    request<SuperTripPayment>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/checkout`,
+      { method: "POST" },
+    ),
+  capture: (superTripId: string) =>
+    request<SuperTripPayment>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/checkout/capture`,
+      { method: "POST" },
+    ),
+  get: (superTripId: string) =>
+    request<SuperTripPayment>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/payment`,
+    ),
+  refund: (superTripId: string, nodeIds: string[], reason = "cancellation") =>
+    request<SuperTripPayment>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/refund`,
+      { method: "POST", body: { node_ids: nodeIds, reason } },
+    ),
+};
+
+// ---- DTO-P3 Phase 5: Disruption Engine (continued) -------------------------
+
+export const disruptionsApi = {
+  trigger: (
+    superTripId: string,
+    body: { node_id: string; kind: SuperDisruptionKind; delta_mins?: number; note?: string; source?: string },
+  ) =>
+    request<SuperTripDisruption>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/disruptions`,
+      { method: "POST", body },
+    ),
+
+  list: (superTripId: string) =>
+    request<SuperTripDisruption[]>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/disruptions`,
+    ),
+
+  applyRecovery: (superTripId: string, disruptionId: string, planId: string) =>
+    request<SuperTripDisruption>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/disruptions/${encodeURIComponent(disruptionId)}/apply/${encodeURIComponent(planId)}`,
+      { method: "POST" },
+    ),
+
+  dismiss: (superTripId: string, disruptionId: string) =>
+    request<SuperTripDisruption>(
+      `/api/super-trips/${encodeURIComponent(superTripId)}/disruptions/${encodeURIComponent(disruptionId)}`,
+      { method: "DELETE" },
+    ),
+};

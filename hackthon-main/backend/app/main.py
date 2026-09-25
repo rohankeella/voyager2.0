@@ -8,19 +8,25 @@ from app.config import get_settings
 from app.database import Base, engine
 from app import models  # noqa: F401 — register mappers
 from app.routers import (
+    agents,
     auth,
     capacity,
+    disruptions,
     experiences,
     expenses,
     graph,
     groups,
+    guides,
     itineraries,
     ledger,
     maps,
+    operator_center,
+    payments,
     providers,
     realtime,
     recommendations,
     stories,
+    super_trips,
     travel,
 )
 
@@ -76,3 +82,15 @@ app.include_router(capacity.router)
 app.include_router(stories.router)
 # P5 — Dependency Graph & Recovery Engine
 app.include_router(graph.router)
+# DTO-P3 Phase 1 — Multi-Agent Planner/Executor/Supervisor
+app.include_router(agents.router)
+# DTO-P3 Phase 2 — Persisted SuperTrip CRUD (used by /copilot & operator Gantt)
+app.include_router(super_trips.router)
+# DTO-P3 Phase 4 — Operator Command Center (live Gantt, vendor matrix)
+app.include_router(operator_center.router)
+# DTO-P3 Phase 5 — Disruption Engine + Cascade Protocol + Recovery Plans
+app.include_router(disruptions.router)
+# DTO-P3 Phase 6 — Razorpay Route split payments (deterministic mock)
+app.include_router(payments.router)
+# DTO-P3 Phase 7 — Decentralised Local Guide Marketplace
+app.include_router(guides.router)
