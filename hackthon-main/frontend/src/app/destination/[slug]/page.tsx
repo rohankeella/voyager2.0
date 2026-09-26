@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { Heart, MapPin, Compass, Share2, Mail } from "lucide-react";
 import Navbar from "@/components/layout/navbar";
+import BackButton from "@/components/ui/back-button";
 import ImageGallery from "@/components/destinations/image-gallery";
 import MatchInfo from "@/components/destinations/match-info";
 import WeatherCard from "@/components/destinations/weather-card";
@@ -125,6 +126,7 @@ export default function DestinationPage({ params }: { params: Promise<{ slug: st
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="mx-auto max-w-7xl px-4 py-24 text-center">
+          <BackButton fallbackHref="/discover" />
           <h1 className="text-2xl font-bold text-dark">Destination not found</h1>
           <p className="mt-2 text-gray-600">We couldn&apos;t find the destination you&apos;re looking for.</p>
           <Link href="/discover" className="mt-6 inline-block rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
@@ -142,6 +144,7 @@ export default function DestinationPage({ params }: { params: Promise<{ slug: st
       <Navbar />
 
       <div className="mx-auto max-w-7xl px-4 pt-24 pb-12 sm:px-6 lg:px-8">
+        <BackButton fallbackHref="/discover" />
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/discover" className="text-sm text-gray-500 hover:text-dark">

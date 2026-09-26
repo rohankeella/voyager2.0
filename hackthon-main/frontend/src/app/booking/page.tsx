@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Calendar, MapPin, Users, ShieldCheck, Loader2 } from "lucide-react";
 import Navbar from "@/components/layout/navbar";
+import BackButton from "@/components/ui/back-button";
 import HotelOffers from "@/components/booking/hotel-offers";
 import type { Trip } from "@/types/trip";
 import { loadTripById, loadTrips, updateTripStatus } from "@/lib/trip-storage";
@@ -55,6 +56,7 @@ function BookingContent() {
       <div className="min-h-screen bg-background">
         <Navbar />
         <div className="mx-auto flex max-w-xl flex-col items-center px-4 py-24 text-center">
+          <BackButton fallbackHref="/planner" />
           <h1 className="text-2xl font-bold text-dark">No trip ready to book yet</h1>
           <p className="mt-2 text-gray-500">
             Build an itinerary in the planner first — you&rsquo;ll come back here to review pricing and confirm.
@@ -104,7 +106,8 @@ function BookingContent() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+      <div className="mx-auto max-w-5xl px-4 pt-24 pb-10 sm:px-6">
+        <BackButton fallbackHref="/planner" />
         <h1 className="text-2xl font-bold text-dark sm:text-3xl">Review & Book</h1>
         <p className="mt-1 text-gray-500">Confirm your itinerary, check the price breakdown, and complete booking.</p>
 

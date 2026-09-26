@@ -18,7 +18,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, LngLatBoundsLike, Map as MLMap, ProjectionSpecification } from "maplibre-gl";
+import type { GeoJSONSource, LngLatBoundsLike, Map as MLMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import type { SuperTrip, TripNode } from "@/lib/api";
@@ -219,14 +219,13 @@ const SuperTripGlobe = forwardRef<SuperTripGlobeHandle, Props>(function SuperTri
       zoom: 1.5,
       pitch: 0,
       bearing: 0,
-      // MapLibre v5+ supports true globe projection.
-      projection: { type: "globe" } as unknown as ProjectionSpecification,
       attributionControl: { compact: true },
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     mapRef.current = map;
 
     map.on("load", () => {
+      map.setProjection({ type: "globe" });
       styleReadyRef.current = true;
       // set atmospheric sky on the globe when supported (skipped if style overrides)
       try {

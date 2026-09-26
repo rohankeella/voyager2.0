@@ -190,6 +190,7 @@ def seed() -> None:
             slug = slugify(f"{spec['city']}-{spec['title']}")
             existing = db.execute(select(Experience).where(Experience.slug == slug)).scalar_one_or_none()
             if existing:
+                existing.attributes = {**existing.attributes, "is_sample": True}
                 continue
             city = CITIES[spec["city"]]
             exp = Experience(
@@ -207,7 +208,7 @@ def seed() -> None:
                 country=city["country"],
                 capacity_max=100,
                 seats_available=100,
-                attributes=spec.get("attributes", {}),
+                attributes={**spec.get("attributes", {}), "is_sample": True},
                 interest_tags=spec["tags"],
             )
             for h in spec["hours"]:

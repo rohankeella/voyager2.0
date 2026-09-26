@@ -1,7 +1,8 @@
 from functools import lru_cache
+import json
 from typing import Annotated, List
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -10,9 +11,14 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./voyager.db"
 
-    jwt_secret: str = "dev-insecure-change-me"
-    jwt_algorithm: str = "HS256"
-    jwt_expires_minutes: int = 60 * 24
+    jwt_secret: str = Field(default="dev-insecure-change-me", validation_alias=AliasChoices("JWT_SECRET", "SECRET_KEY"))
+    jwt_algorithm: str = Field(default="HS256", validation_alias=AliasChoices("JWT_ALGORITHM", "ALGORITHM"))
+    jwt_expires_minutes: int = Field(default=60 * 24, gt=0, validation_alias=AliasChoices("JWT_EXPIRES_MINUTES", "ACCESS_TOKEN_EXPIRE_MINUTES"))
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _postgres_driver(cls, value):
+        return value.replace("postgresql://", "postgresql+psycopg://", 1) if isinstance(value, str) else value
 
     # NoDecode prevents pydantic-settings from trying to JSON-parse the raw
     # env string — the CSV validator below handles it explicitly.
@@ -43,6 +49,8 @@ class Settings(BaseSettings):
     @classmethod
     def _split_cors(cls, v):
         if isinstance(v, str):
+            if v.strip().startswith("["):
+                return json.loads(v)
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
 

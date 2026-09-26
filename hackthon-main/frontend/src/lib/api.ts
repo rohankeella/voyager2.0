@@ -220,13 +220,17 @@ export const recommendationsApi = {
 };
 
 export const experiencesApi = {
+  search: (params: URLSearchParams, signal?: AbortSignal) =>
+    request<ApiExperience[]>(`/api/experiences?${params}`, { auth: false, signal }),
+  facets: (params: URLSearchParams, signal?: AbortSignal) =>
+    request<{ categories: { id: string; name: string; count: number }[]; prices: { currency: string; min: number; max: number }[] }>(`/api/experiences/facets?${params}`, { auth: false, signal }),
   list: (params: { city?: string; category?: string; q?: string; limit?: number; offset?: number } = {}) => {
     const qs = new URLSearchParams();
     for (const [k, v] of Object.entries(params)) if (v !== undefined) qs.set(k, String(v));
     const suffix = qs.toString() ? `?${qs.toString()}` : "";
     return request<ApiExperience[]>(`/api/experiences${suffix}`, { auth: false });
   },
-  get: (id: string) => request<ApiExperience>(`/api/experiences/${id}`, { auth: false }),
+  get: (id: string, signal?: AbortSignal) => request<ApiExperience>(`/api/experiences/${encodeURIComponent(id)}`, { auth: false, signal }),
 };
 
 // ---- P2 · Groups + ledger --------------------------------------------------

@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { CheckCircle2, Calendar, MapPin, Users } from "lucide-react";
 import Navbar from "@/components/layout/navbar";
+import BackButton from "@/components/ui/back-button";
 import { BOOKINGS_STORAGE_KEY, type Booking } from "@/types/operator";
 import { formatINR } from "@/lib/pricing";
 
@@ -31,7 +32,8 @@ function BookingConfirmationContent() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      <div className="mx-auto max-w-xl px-4 py-16 text-center sm:px-6">
+      <div className="mx-auto max-w-xl px-4 pt-24 pb-16 text-center sm:px-6">
+        <BackButton fallbackHref="/dashboard/bookings" />
         <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
           <CheckCircle2 className="h-8 w-8" />
         </span>

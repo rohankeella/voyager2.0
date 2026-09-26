@@ -6,6 +6,7 @@ import { motion, AnimatePresence, Reorder } from "framer-motion";
 import Link from "next/link";
 import { Calendar, MapPin, Users, DollarSign, Save, Share2, Download, Plus, CreditCard } from "lucide-react";
 import Navbar from "@/components/layout/navbar";
+import BackButton from "@/components/ui/back-button";
 import DayCard from "@/components/planner/day-card";
 import FlightSearch from "@/components/planner/flight-search";
 import { destinations } from "@/lib/mock-data";
@@ -213,6 +214,7 @@ function PlannerContent() {
       <Navbar />
 
       <div className="mx-auto max-w-5xl px-4 pt-24 pb-12 sm:px-6 lg:px-8">
+        <BackButton fallbackHref="/discover" />
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <h1 className="text-3xl font-bold text-dark sm:text-4xl">Trip Planner</h1>
           <p className="mt-2 text-gray-600">Build a custom day-by-day itinerary for your next adventure</p>

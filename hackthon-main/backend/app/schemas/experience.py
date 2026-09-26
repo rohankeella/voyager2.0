@@ -1,9 +1,25 @@
 from datetime import datetime
+import math
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.experience import ExperienceCategory
+
+
+def _catalog_attributes(value):
+    if value is None:
+        return value
+    for key, maximum in {"rating": 5, "recommendation_score": 100,
+                         "popularity_score": None, "original_price": None, "review_count": None}.items():
+        number = value.get(key)
+        if number is not None and (type(number) not in (int, float) or not math.isfinite(number)
+                                   or number < 0 or (maximum is not None and number > maximum)):
+            raise ValueError(f"{key} must be a non-negative number" + (f" no greater than {maximum}" if maximum else ""))
+    for key in ("free_cancellation", "instant_confirmation", "is_sample"):
+        if key in value and type(value[key]) is not bool:
+            raise ValueError(f"{key} must be a boolean")
+    return value
 
 
 class OperatingHourIn(BaseModel):
@@ -36,10 +52,12 @@ class ExperienceBase(BaseModel):
 
 
 class ExperienceCreate(ExperienceBase):
+    _validate_attributes = field_validator("attributes")(_catalog_attributes)
     hours: list[OperatingHourIn] = Field(default_factory=list)
 
 
 class ExperienceUpdate(BaseModel):
+    _validate_attributes = field_validator("attributes")(_catalog_attributes)
     title: str | None = None
     description: str | None = None
     category: ExperienceCategory | None = None

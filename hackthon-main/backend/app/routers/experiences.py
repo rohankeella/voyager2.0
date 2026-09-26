@@ -6,10 +6,11 @@ a `catalog:changed` event on the SSE bus (F-06) so open recommendation feeds
 refresh within seconds.
 """
 
-from typing import Optional
+from datetime import date as Date
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -55,31 +56,106 @@ def _unique_slug(db: Session, base: str) -> str:
 
 # --------------------------- public catalog --------------------------------
 
+CATEGORY_LABELS = {
+    "CULTURE": "Attractions & culture", "OUTDOOR": "Nature & adventure",
+    "FOOD": "Food & drink", "WORKSHOP": "Workshops", "FESTIVAL": "Festivals",
+    "NIGHTLIFE": "Nightlife & shows",
+}
+
+
+def _catalog(city=None, q=None, date=None):
+    stmt = select(Experience).where(Experience.is_active.is_(True))
+    if city:
+        stmt = stmt.where(Experience.city.ilike(f"%{city}%"))
+    if q:
+        stmt = stmt.where(or_(Experience.title.ilike(f"%{q}%"),
+                             Experience.description.ilike(f"%{q}%"),
+                             Experience.city.ilike(f"%{q}%")))
+    if date:
+        # Operating days are a schedule, not a claim of live booking inventory.
+        stmt = stmt.where(or_(~Experience.hours.any(), Experience.hours.any(
+            OperatingHour.day_of_week == date.weekday())))
+    return stmt
+
+
+@router.get("/facets")
+def experience_facets(db: Session = Depends(get_db), city: str | None = None,
+                      q: str | None = None, date: Date | None = None):
+    base = _catalog(city, q, date).subquery()
+    prices = db.execute(select(base.c.currency, func.min(base.c.base_cost),
+                               func.max(base.c.base_cost)).group_by(base.c.currency)).all()
+    counts = dict(db.execute(select(base.c.category, func.count()).group_by(base.c.category)).all())
+    return {"categories": [{"id": key, "name": name, "count": counts.get(key, 0)}
+                           for key, name in CATEGORY_LABELS.items()],
+            "prices": [{"currency": c, "min": float(lo), "max": float(hi)} for c, lo, hi in prices]}
+
 
 @router.get("", response_model=list[ExperienceOut])
 def list_experiences(
     db: Session = Depends(get_db),
     city: Optional[str] = Query(default=None),
-    category: Optional[ExperienceCategory] = Query(default=None),
+    category: list[ExperienceCategory] = Query(default=[]),
     q: Optional[str] = Query(default=None, description="title/description search"),
-    limit: int = Query(default=50, le=200),
+    search: str | None = None,
+    date: Date | None = None,
+    minPrice: float | None = Query(default=None, ge=0),
+    maxPrice: float | None = Query(default=None, ge=0),
+    currency: str | None = Query(default=None, min_length=3, max_length=3),
+    duration: list[Literal["short", "half", "full", "day", "multi"]] = Query(default=[]),
+    rating: float | None = Query(default=None, ge=0, le=5),
+    freeCancellation: bool = False,
+    sort: Literal["popularity", "price_asc", "price_desc", "rating", "recommended"] = "popularity",
+    limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> list[ExperienceOut]:
-    stmt = select(Experience).options(selectinload(Experience.hours)).where(Experience.is_active == True)  # noqa: E712
-    if city:
-        stmt = stmt.where(Experience.city.ilike(f"%{city}%"))
+    if minPrice is not None and maxPrice is not None and minPrice > maxPrice:
+        raise HTTPException(422, "minPrice must not exceed maxPrice")
+    stmt = _catalog(city, q, date).options(selectinload(Experience.hours))
+    if search:
+        stmt = stmt.where(or_(Experience.title.ilike(f"%{search}%"), Experience.description.ilike(f"%{search}%")))
     if category:
-        stmt = stmt.where(Experience.category == category)
-    if q:
-        stmt = stmt.where(Experience.title.ilike(f"%{q}%"))
-    stmt = stmt.limit(limit).offset(offset).order_by(Experience.title.asc())
+        stmt = stmt.where(Experience.category.in_(category))
+    if minPrice is not None:
+        stmt = stmt.where(Experience.base_cost >= minPrice)
+    if maxPrice is not None:
+        stmt = stmt.where(Experience.base_cost <= maxPrice)
+    if currency:
+        stmt = stmt.where(Experience.currency == currency)
+    if rating is not None:
+        stmt = stmt.where(Experience.attributes["rating"].as_float() >= rating)
+    if freeCancellation:
+        stmt = stmt.where(Experience.attributes["free_cancellation"].as_boolean().is_(True))
+    if duration:
+        ranges = {"short": (0, 180), "half": (180, 360), "full": (360, 720),
+                  "day": (720, 1440), "multi": (1440, None)}
+        conditions = []
+        for key in duration:
+            lo, hi = ranges[key]
+            condition = Experience.duration_mins >= lo
+            if hi is not None:
+                condition &= Experience.duration_mins < hi
+            conditions.append(condition)
+        stmt = stmt.where(or_(*conditions))
+    orders = {
+        "price_asc": Experience.base_cost.asc(), "price_desc": Experience.base_cost.desc(),
+        "rating": Experience.attributes["rating"].as_float().desc().nullslast(),
+        "popularity": Experience.attributes["popularity_score"].as_float().desc().nullslast(),
+        "recommended": Experience.attributes["recommendation_score"].as_float().desc().nullslast(),
+    }
+    # Currency grouping avoids implying an exchange rate when no conversion exists.
+    if sort.startswith("price"):
+        stmt = stmt.order_by(Experience.currency)
+    stmt = stmt.order_by(orders[sort], Experience.title, Experience.id).limit(limit).offset(offset)
     rows = db.execute(stmt).scalars().all()
     return [ExperienceOut.model_validate(r) for r in rows]
 
 
 @router.get("/{experience_id}", response_model=ExperienceOut)
 def get_experience(experience_id: str, db: Session = Depends(get_db)) -> ExperienceOut:
-    return ExperienceOut.model_validate(_load(db, experience_id))
+    exp = _load(db, experience_id)
+    if not exp.is_active:
+        raise HTTPException(404, "experience not found")
+    return ExperienceOut.model_validate(exp)
 
 
 # --------------------------- provider CRUD ---------------------------------

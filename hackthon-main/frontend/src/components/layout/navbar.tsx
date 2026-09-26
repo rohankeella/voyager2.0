@@ -9,7 +9,7 @@ const navLinks = [
   { href: "/discover", label: "Discover" },
   { href: "/recommendations", label: "Recommendations" },
   { href: "/discover", label: "Destinations" },
-  { href: "/discover", label: "Experiences" },
+  { href: "/experiences", label: "Experiences" },
   { href: "/", label: "About" },
 ];
 
@@ -44,7 +44,7 @@ export default function Navbar({ landing = false }: { landing?: boolean }) {
                 Voyager
               </span>
             </Link>
-            <div className={`hidden items-center gap-6 ${landing ? "lg:flex" : "md:flex"}`}>
+            <div className={`hidden items-center gap-6 ${landing ? "lg:flex" : "xl:flex"}`}>
               {links.map((link) => (
                 <Link key={link.label} href={link.href} className={linkClass}>
                   {link.label}
@@ -53,7 +53,7 @@ export default function Navbar({ landing = false }: { landing?: boolean }) {
             </div>
           </div>
 
-          <div className={`hidden items-center gap-3 ${landing ? "lg:flex" : "md:flex"}`}>
+          <div className={`hidden items-center gap-3 ${landing ? "lg:flex" : "xl:flex"}`}>
             <Link
               href="/operator/overview"
               className="rounded-full px-4 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-dark"
@@ -75,7 +75,7 @@ export default function Navbar({ landing = false }: { landing?: boolean }) {
           </div>
 
           <button
-            className={`${landing ? "lg:hidden" : "md:hidden"} rounded-lg p-2 text-gray-600 hover:bg-gray-100`}
+            className={`${landing ? "lg:hidden" : "xl:hidden"} rounded-lg p-2 text-gray-600 hover:bg-gray-100`}
             onClick={() => setIsOpen(!isOpen)}
             aria-label="Toggle menu"
             aria-expanded={isOpen}
@@ -94,7 +94,7 @@ export default function Navbar({ landing = false }: { landing?: boolean }) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={reducedMotion ? { duration: 0 } : undefined}
-            className={`${landing ? "lg:hidden" : "md:hidden"} border-t border-gray-100 bg-white/95 backdrop-blur-md`}
+            className={`${landing ? "lg:hidden" : "xl:hidden"} border-t border-gray-100 bg-white/95 backdrop-blur-md`}
           >
             <div className="space-y-1 px-4 pb-4 pt-2">
               {links.map((link) => (
