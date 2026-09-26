@@ -1,0 +1,1003 @@
+Absolutely. Since you're using **Next.js + Tailwind CSS** and want Kilo to build the project, the best approach is to give it a detailed product/design prompt rather than just saying "make a travel website."
+
+ Here’s a **copy-paste-ready prompt** you can give to Kilo:
+
+ Kilo Prompt — Interactive Travel Preference & Recommendation Website✓
+
+Build a modern, interactive travel-planning web application using **Next.js (App Router), TypeScript, and Tailwind CSS**.
+
+ The goal is to create a beautiful travel platform where users can register/login, complete an interactive travel-preference questionnaire, and then receive personalized travel recommendations based on their preferences.
+
+ ## 1\. Overall Product
+
+ The application should feel like a modern travel-tech startup, similar in quality and polish to platforms such as Airbnb, Booking.com, and modern travel recommendation apps.
+
+ The UI should be:
+
+ - Modern
+- Premium
+- Minimal but visually rich
+- Highly interactive
+- Mobile responsive
+- Smooth and engaging
+- Image-focused
+- Easy to navigate
+- Accessible
+- Fast and performant
+
+ Use subtle animations and micro-interactions throughout the application.
+
+ Use **Tailwind CSS** for styling.
+
+ Use **Framer Motion / Motion** where appropriate for animations.
+
+ Use reusable React components rather than putting everything into a single page.
+
+---
+
+ # 2\. Tech Stack
+
+ Use:
+
+ - Next.js with App Router
+- TypeScript
+- Tailwind CSS
+- React
+- Framer Motion / Motion for animations
+- Lucide React for icons
+- shadcn/ui where useful
+- Next.js Image component
+- A clean component-based architecture
+
+ For now, authentication and data can use mock/local data if a backend is not configured.
+
+ Structure the project so that a real backend/database can easily be added later.
+
+---
+
+ # 3\. Landing Page
+
+ Create a beautiful landing page at `/`.
+
+ The hero section should immediately communicate the idea:
+
+ "Your next journey, personalized for you."
+
+ Include:
+
+ - Large travel background image
+- Dark/gradient overlay
+- Navbar
+- Logo
+- Login button
+- Get Started button
+- Main CTA
+- Short description
+
+ Example hero content:
+
+ "Travel that matches you."
+
+ "Tell us what you love. We'll help you discover where to go, what to do, and how to experience it."
+
+ Primary button:
+
+ "Start Planning"
+
+ Secondary button:
+
+ "Explore Destinations"
+
+ Add an animated scroll indicator.
+
+---
+
+ # 4\. Navigation Bar
+
+ Create a responsive navbar.
+
+ Desktop:
+
+ - Logo
+- Discover
+- Destinations
+- Experiences
+- About
+- Login
+- Get Started
+
+ Mobile:
+
+ - Logo
+- Hamburger menu
+- Slide-down/mobile navigation
+
+ Navbar should become slightly blurred/glass-like when scrolling.
+
+---
+
+ # 5\. Registration Page
+
+ Create `/register`.
+
+ Design it as a modern split-screen travel registration experience.
+
+ Left side:
+
+ - Beautiful travel image
+- Travel quote
+- Small destination information
+
+ Right side:
+
+ Registration form:
+
+ - Full name
+- Email
+- Password
+- Confirm password
+- Country
+- Optional phone number
+
+ Checkbox:
+
+ "I agree to the Terms & Privacy Policy"
+
+ Button:
+
+ "Create Account"
+
+ Also include:
+
+ "Already have an account? Log in"
+
+ Add:
+
+ - Form validation
+- Password strength indicator
+- Show/hide password
+- Loading state
+- Error states
+- Success state
+
+---
+
+ # 6\. Login Page
+
+ Create `/login`.
+
+ Fields:
+
+ - Email
+- Password
+
+ Features:
+
+ - Show/hide password
+- Remember me
+- Forgot password
+- Login button
+
+ Also include:
+
+ "Don't have an account? Create one"
+
+ Add a social login UI for:
+
+ - Google
+- Apple
+
+ These can be mock buttons for now.
+
+ Use a beautiful travel image/background.
+
+---
+
+ # 7\. Onboarding / Travel Preference Questionnaire
+
+ After registration, redirect the user to:
+
+ `/onboarding`
+
+ This is the most important part of the application.
+
+ Create a multi-step interactive questionnaire.
+
+ Show a progress bar at the top.
+
+ Example:
+
+ Step 1 of 7
+
+ Progress: █████░░░
+
+ The user should be able to:
+
+ - Select options
+- Go back
+- Continue
+- Skip optional questions
+- See their selections
+- Edit previous answers
+
+ Use animated transitions between questions.
+
+ Each question should have beautiful selectable cards with images/icons.
+
+ Selected cards should have:
+
+ - Colored border
+- Checkmark
+- Slight scale animation
+- Background highlight
+
+---
+
+ # 8\. Onboarding Questions
+
+ Create approximately 7-10 steps.
+
+ ### Step 1 — What kind of traveler are you?
+
+ Options:
+
+ - Adventure Seeker
+- Relaxation Lover
+- Culture Explorer
+- Foodie
+- Nature Lover
+- Luxury Traveler
+- Budget Traveler
+- Digital Nomad
+
+ Allow multiple selections.
+
+---
+
+ ### Step 2 — What's your ideal trip style?
+
+ Options:
+
+ - Solo
+- Couple
+- Friends
+- Family
+- Group
+- Business + Leisure
+
+---
+
+ ### Step 3 — What activities do you enjoy?
+
+ Use image cards.
+
+ Options:
+
+ - Hiking
+- Beaches
+- Trekking
+- Scuba Diving
+- Skiing
+- Museums
+- Historical Places
+- Nightlife
+- Shopping
+- Food Tours
+- Photography
+- Wildlife
+- Camping
+- Road Trips
+- Water Sports
+- Festivals
+
+ Allow multiple selections.
+
+---
+
+ ### Step 4 — What kind of destinations attract you?
+
+ Options:
+
+ - Beaches
+- Mountains
+- Cities
+- Countryside
+- Islands
+- Forests
+- Deserts
+- Historical Cities
+- Tropical Destinations
+- Snow Destinations
+
+---
+
+ ### Step 5 — What's your budget?
+
+ Create an interactive budget selector.
+
+ Options:
+
+ - Backpacker
+- Budget
+- Comfortable
+- Premium
+- Luxury
+
+ Also allow a custom approximate daily budget.
+
+ Use a slider if appropriate.
+
+---
+
+ ### Step 6 — How long do you usually travel?
+
+ Options:
+
+ - Weekend
+- 3–5 days
+- 1 week
+- 1–2 weeks
+- 2–4 weeks
+- 1+ month
+
+---
+
+ ### Step 7 — When do you prefer to travel?
+
+ Create selectable seasons/months:
+
+ - Spring
+- Summer
+- Monsoon
+- Autumn
+- Winter
+
+ Also allow users to select specific months.
+
+---
+
+ ### Step 8 — What's your travel pace?
+
+ Options:
+
+ - Slow & Relaxed
+- Balanced
+- Packed Schedule
+- Adventure Packed
+
+ Explain each option briefly.
+
+---
+
+ ### Step 9 — What matters most when choosing a destination?
+
+ Allow ranking/preferences for:
+
+ - Price
+- Weather
+- Food
+- Safety
+- Nature
+- Culture
+- Nightlife
+- Adventure
+- Luxury
+- Accessibility
+
+ Create a nice drag-and-drop/ranking UI if practical.
+
+---
+
+ ### Step 10 — Final Preferences
+
+ Ask:
+
+ "What does your perfect trip look like?"
+
+ Provide a text area.
+
+ Placeholder:
+
+ "Tell us anything else you'd love from your next trip..."
+
+ Then show:
+
+ "Create My Travel Profile"
+
+---
+
+ # 9\. Preference Summary
+
+ After onboarding, create:
+
+ `/profile/preferences`
+
+ Show a beautiful summary of the user's travel personality.
+
+ Example:
+
+ "You're an Adventure Explorer"
+
+ Then show:
+
+ - Travel style
+- Favorite activities
+- Favorite destinations
+- Budget
+- Travel duration
+- Preferred season
+- Travel pace
+
+ Create visual chips/tags for preferences.
+
+ Include:
+
+ "Edit Preferences"
+
+ button.
+
+---
+
+ # 10\. Personalized Dashboard
+
+ After onboarding, redirect to:
+
+ `/dashboard`
+
+ This should be the main logged-in experience.
+
+ Dashboard should contain:
+
+ ### Welcome Section
+
+ "Good morning, Alex 👋"
+
+ "Ready to discover your next adventure?"
+
+---
+
+ ### Personalized Recommendation
+
+ Large featured destination card.
+
+ Example:
+
+ "Kyoto, Japan"
+
+ "98% match for you"
+
+ Explain:
+
+ "Based on your love for culture, food, photography, and slow travel."
+
+ Show:
+
+ - Destination image
+- Match percentage
+- Estimated budget
+- Best time to visit
+- Recommended duration
+- Favorite activities
+
+ Button:
+
+ "Explore Destination"
+
+---
+
+ # 11\. Destination Recommendation Cards
+
+ Create a responsive grid.
+
+ Each destination card should include:
+
+ - Large image
+- Destination name
+- Country
+- Match percentage
+- Short description
+- Estimated budget
+- Best season
+- Favorite activities
+- Heart/favorite button
+
+ Example:
+
+ "96% Match"
+
+ "Amalfi Coast, Italy"
+
+ "Perfect for your love of coastal scenery, food, photography, and relaxed travel."
+
+ Add hover effects.
+
+---
+
+ # 12\. Discover Page
+
+ Create `/discover`.
+
+ Include:
+
+ - Search bar
+- Destination filters
+- Activity filters
+- Budget filters
+- Season filters
+- Travel style filters
+
+ Add categories such as:
+
+ - Trending
+- Beach Escapes
+- Mountain Adventures
+- City Breaks
+- Hidden Gems
+- Weekend Trips
+- Luxury Escapes
+- Budget Adventures
+
+ Cards should animate when filtering.
+
+---
+
+ # 13\. Destination Details Page
+
+ Create dynamic route:
+
+ `/destination/[slug]`
+
+ For example:
+
+ `/destination/bali`
+
+ Page should contain:
+
+ - Large image gallery
+- Destination name
+- Country
+- Match percentage
+- Description
+- Why this matches you
+- Best time to visit
+- Recommended duration
+- Estimated budget
+- Popular activities
+- Places to visit
+- Food recommendations
+- Travel tips
+- Weather overview
+- Safety information
+
+ Add CTA:
+
+ "Plan My Trip"
+
+ and:
+
+ "Save Destination"
+
+---
+
+ # 14\. Trip Planner
+
+ Create:
+
+ `/planner`
+
+ Allow users to build a trip.
+
+ Example:
+
+ Destination: Bali
+
+ Duration: 7 days
+
+ Budget: Comfortable
+
+ Create an itinerary UI:
+
+ Day 1\
+ Arrival + Beach
+
+ Day 2\
+ Ubud + Culture
+
+ Day 3\
+ Waterfalls + Hiking
+
+ etc.
+
+ Use timeline cards.
+
+ Allow:
+
+ - Add activity
+- Remove activity
+- Reorder activities
+- Edit day
+- Save itinerary
+
+ Make this interface highly interactive.
+
+---
+
+ # 15\. Favorites
+
+ Create:
+
+ `/favorites`
+
+ Show destinations the user has saved.
+
+ Allow users to:
+
+ - Remove favorite
+- Open destination
+- Compare destinations
+
+---
+
+ # 16\. User Profile
+
+ Create:
+
+ `/profile`
+
+ Include:
+
+ - Profile image/avatar
+- Name
+- Email
+- Country
+- Travel personality
+- Preferences
+- Saved destinations
+- Previous trips
+
+ Buttons:
+
+ - Edit Profile
+- Edit Travel Preferences
+- Logout
+
+---
+
+ # 17\. Design System
+
+ Use a consistent design system.
+
+ Suggested colors:
+
+ Primary:\
+ #0F766E / teal
+
+ Secondary:\
+ #14B8A6
+
+ Accent:\
+ #F59E0B
+
+ Background:\
+ #F8FAFC
+
+ Dark:\
+ #0F172A
+
+ White:\
+ #FFFFFF
+
+ Use gradients carefully.
+
+ Typography should feel modern and premium.
+
+ Use large headings and generous spacing.
+
+ Use rounded cards, approximately `rounded-2xl` or `rounded-3xl`.
+
+ Use soft shadows rather than heavy borders.
+
+---
+
+ # 18\. Animations
+
+ Add tasteful animations.
+
+ Examples:
+
+ - Fade-in sections
+- Slide-up cards
+- Card hover scale
+- Button hover effects
+- Animated progress bar
+- Step transition animations
+- Image zoom on hover
+- Heart animation when favoriting
+- Skeleton loading
+- Toast notifications
+- Modal animations
+
+ Do not overuse animations.
+
+ The application should feel smooth rather than flashy.
+
+---
+
+ # 19\. Responsive Design
+
+ The entire application must work properly on:
+
+ - Mobile
+- Tablet
+- Laptop
+- Desktop
+- Large screens
+
+ Pay special attention to the onboarding experience on mobile.
+
+ Cards should adapt to screen size.
+
+ Navigation should become a mobile menu.
+
+---
+
+ # 20\. Mock Data
+
+ Create realistic mock destination data.
+
+ Include at least 15 destinations from different parts of the world.
+
+ Examples:
+
+ - Bali
+- Kyoto
+- Paris
+- Santorini
+- Swiss Alps
+- Dubai
+- Iceland
+- New Zealand
+- Thailand
+- Maldives
+- Barcelona
+- Cappadocia
+- Kerala
+- Rajasthan
+- Tokyo
+
+ Each destination should have:
+
+ - Name
+- Country
+- Image
+- Description
+- Activities
+- Budget
+- Best season
+- Duration
+- Travel styles
+- Tags
+- Match score
+
+ Generate match scores dynamically based on the user's selected preferences rather than hardcoding everything.
+
+---
+
+ # 21\. Preference Matching Logic
+
+ Create a simple recommendation algorithm.
+
+ For example:
+
+ Each destination has tags:
+
+```
+{
+  activities: ["hiking", "nature", "photography"],
+  styles: ["adventure", "solo"],
+  environments: ["mountains"],
+  budget: "comfortable",
+  pace: "balanced"
+}
+```
+
+ Compare the user's preferences against destination attributes.
+
+ Calculate a match score from 0-100.
+
+ Example:
+
+```
+Activities match: 30%
+Travel style: 20%
+Destination type: 20%
+Budget: 15%
+Travel pace: 10%
+Season: 5%
+```
+
+ Use the resulting score to sort destinations.
+
+ Show:
+
+ "92% Match"
+
+ instead of simply showing random recommendations.
+
+ Keep this logic modular so it can later be replaced with an AI recommendation system.
+
+---
+
+ # 22\. Authentication State
+
+ Create a simple authentication abstraction.
+
+ For development, mock authentication is acceptable.
+
+ Create a structure that can later connect to:
+
+ - Supabase
+- Firebase
+- Auth.js
+- Custom backend
+
+ Do not tightly couple authentication logic to UI components.
+
+ Protect pages such as:
+
+ - `/dashboard`
+- `/profile`
+- `/favorites`
+- `/planner`
+- `/onboarding`
+
+ Unauthenticated users should be redirected to `/login`.
+
+---
+
+ # 23\. Reusable Components
+
+ Create reusable components such as:
+
+ - Navbar
+- Footer
+- Button
+- DestinationCard
+- ActivityCard
+- PreferenceCard
+- ProgressBar
+- SearchBar
+- FilterPanel
+- MatchBadge
+- Rating/Score component
+- Modal
+- Toast
+- LoadingSkeleton
+- Avatar
+- TripTimeline
+- ItineraryCard
+
+ Keep components clean and reusable.
+
+---
+
+ # 24\. Folder Structure
+
+ Use a clean structure similar to:
+
+```
+app/
+  page.tsx
+  login/
+    page.tsx
+  register/
+    page.tsx
+  onboarding/
+    page.tsx
+  dashboard/
+    page.tsx
+  discover/
+    page.tsx
+  destination/
+    [slug]/
+      page.tsx
+  planner/
+    page.tsx
+  favorites/
+    page.tsx
+  profile/
+    page.tsx
+
+components/
+  layout/
+  auth/
+  onboarding/
+  destinations/
+  planner/
+  profile/
+  ui/
+
+lib/
+  auth.ts
+  recommendations.ts
+  mock-data.ts
+  utils.ts
+
+types/
+  travel.ts
+  user.ts
+```
+
+---
+
+ # 25\. Important UX Details
+
+ The website should not feel like a generic CRUD application.
+
+ It should feel like an actual travel product.
+
+ Focus heavily on:
+
+ - High-quality travel imagery
+- Interactive cards
+- Personalization
+- Clear CTAs
+- Smooth transitions
+- Empty states
+- Loading states
+- Error states
+- Responsive layouts
+- Good typography
+- Visual hierarchy
+
+ Avoid:
+
+ - Excessive gradients
+- Overly bright colors
+- Huge amounts of text
+- Generic dashboard designs
+- Unnecessary animations
+- Cluttered layouts
+
+---
+
+ # 26\. Final Requirement
+
+ Build the application as a **working frontend**, not just static mockup screens.
+
+ The following flow must work:
+
+ Landing Page\
+ → Register\
+ → Onboarding\
+ → Travel Preferences\
+ → Personalized Dashboard\
+ → Discover Destinations\
+ → Destination Details\
+ → Save Destination\
+ → Favorites\
+ → Trip Planner\
+ → Profile
+
+ The onboarding data must be stored in application state/local storage so that recommendations actually change according to the user's preferences.
+
+ Make the application polished enough that it looks like a real startup MVP ready to be demonstrated to users or investors.
+
+ Before finishing:
+
+ - Check all routes
+- Check responsive design
+- Check buttons
+- Check navigation
+- Check forms
+- Check onboarding state
+- Check recommendation logic
+- Check local storage persistence
+- Remove console errors
+- Fix TypeScript errors
+- Fix lint errors
+- Ensure the project builds successfully
+
+ Do not stop at creating the homepage. Implement the complete user journey described above.
+
+ **One important suggestion:** don't ask Kilo to build everything in one giant pass if it starts making messy code. A better workflow is to first give it the prompt above, then ask it to **implement in phases**: (1) design system + landing/auth, (2) onboarding, (3) recommendation engine, (4) dashboard/discover, (5) planner/profile, (6) polish/testing. That usually produces a much cleaner Next.js project.
