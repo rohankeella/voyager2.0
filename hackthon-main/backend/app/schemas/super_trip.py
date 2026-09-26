@@ -94,6 +94,7 @@ class GlobalConstraints(BaseModel):
     start_date: datetime
     end_date: datetime
     home_location: str | None = None          # e.g. "Bangalore, IN"
+    destination: str | None = None
     traveler_count: int = Field(default=1, ge=1, le=20)
     preferences: dict[str, Any] = Field(default_factory=dict)
 

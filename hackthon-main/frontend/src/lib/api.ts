@@ -1094,6 +1094,7 @@ export type GlobalConstraints = {
   start_date: string;
   end_date: string;
   home_location?: string | null;
+  destination?: string | null;
   traveler_count?: number;
   preferences?: Record<string, unknown>;
 };
@@ -1133,14 +1134,14 @@ export type PlanTripRequest = {
 export const agentsApi = {
   status: () =>
     request<{
-      gemini_configured: boolean;
-      gemini_model: string | null;
+      groq_configured: boolean;
+      groq_model: string | null;
       amadeus_configured: boolean;
       note: string;
     }>("/api/agents/status"),
 
-  planTrip: (payload: PlanTripRequest) =>
-    request<PlanTripResponse>("/api/agents/plan-trip", { method: "POST", body: payload }),
+  planTrip: (payload: PlanTripRequest, signal?: AbortSignal) =>
+    request<PlanTripResponse>("/api/agents/plan-trip", { method: "POST", body: payload, signal }),
 };
 
 // ---- DTO-P3: persisted SuperTrips -------------------------------------------

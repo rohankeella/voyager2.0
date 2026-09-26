@@ -3,9 +3,9 @@
 Register → login → verify /api/agents/status → plan-trip → verify persistence
 via /api/super-trips → approve → confirm status flipped.
 
-Skips the actual Gemini call by mocking the LangGraph orchestrator response
-so the test runs offline. To test WITH Gemini, comment out `monkeypatch_plan_trip`
-and set GEMINI_API_KEY in backend/.env.
+Skips the actual Groq call by mocking the LangGraph orchestrator response
+so the test runs offline. To test WITH Groq, comment out `monkeypatch_plan_trip`
+and set GROQ_API_KEY in backend/.env.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ BASE = "http://127.0.0.1:8000"
 
 def monkeypatch_plan_trip():
     """Replace the LangGraph invoke with a deterministic fake response so we
-    can exercise Phase 2 persistence without needing GEMINI_API_KEY set."""
+    can exercise Phase 2 persistence without needing GROQ_API_KEY set."""
     from datetime import datetime, timedelta, timezone
 
     def fake_plan_trip(user_goal, *, traveler_id, constraints_hint=None, max_iterations=3):
@@ -119,12 +119,12 @@ def run() -> None:
     assert r.json() == [], f"expected empty list, got {r.json()}"
     print("    -> empty [OK]")
 
-    # ⚠ The next block calls plan-trip. That hits Gemini if configured.
+    # ⚠ The next block calls plan-trip. That hits Groq if configured.
     # For offline smoke, we can't easily monkey-patch a running process; the
-    # test skips this if GEMINI_API_KEY isn't set (Phase 1 covered that path).
+    # test skips this if GROQ_API_KEY isn't set (Phase 1 covered that path).
     status = httpx.get(f"{BASE}/api/agents/status", timeout=10).json()
-    if not status.get("gemini_configured"):
-        print("[!] GEMINI_API_KEY not set — skipping live plan-trip test.")
+    if not status.get("groq_configured"):
+        print("[!] GROQ_API_KEY not set — skipping live plan-trip test.")
         print("    Add key to backend/.env and re-run to test end-to-end.")
         # Instead, directly test the /api/super-trips POST + approve flow
         # with a synthetic SuperTrip.
@@ -179,7 +179,7 @@ def run() -> None:
         trip_id = detail["id"]
         print(f"    -> persisted {trip_id} status={detail['status']} cost=${detail['total_cost_usd']}")
     else:
-        print("[4] POST /api/agents/plan-trip (live Gemini!)")
+        print("[4] POST /api/agents/plan-trip (live Groq!)")
         r = httpx.post(
             f"{BASE}/api/agents/plan-trip",
             headers=auth_headers,

@@ -54,13 +54,13 @@ class PlanTripResponse(BaseModel):
 def agent_status() -> dict[str, Any]:
     settings = get_settings()
     return {
-        "gemini_configured": bool(settings.gemini_api_key),
-        "gemini_model": settings.gemini_model if settings.gemini_api_key else None,
+        "groq_configured": bool(settings.groq_api_key),
+        "groq_model": settings.groq_model if settings.groq_api_key else None,
         "amadeus_configured": bool(settings.amadeus_client_id and settings.amadeus_client_secret),
         "note": (
-            "Set GEMINI_API_KEY in backend/.env to enable the Planner Agent. "
+            "Set GROQ_API_KEY in backend/.env to enable the Planner Agent. "
             "Amadeus is optional — falls back to deterministic mock data."
-            if not settings.gemini_api_key
+            if not settings.groq_api_key
             else "Ready. Multi-agent orchestration active."
         ),
     }
@@ -86,17 +86,17 @@ async def plan_trip_endpoint(
     token: str | None = Depends(oauth2_scheme),
 ) -> PlanTripResponse:
     settings = get_settings()
-    if not settings.gemini_api_key:
+    if not settings.groq_api_key:
         raise HTTPException(
             status_code=503,
             detail=(
-                "Planner Agent needs a Gemini API key. Add GEMINI_API_KEY to "
-                "backend/.env (free at https://aistudio.google.com/apikey) and restart."
+                "The trip planner is not configured. Add GROQ_API_KEY to "
+                "backend/.env and restart the backend."
             ),
         )
 
     user = _resolve_user(token, db)
-    traveler = (payload.traveler_id or "").strip()
+    traveler = f"USR-{user.id}" if user else "USR-anon"
     if not traveler:
         traveler = f"USR-{user.id}" if user else "USR-anon"
     elif not traveler.startswith("USR-"):
@@ -108,7 +108,7 @@ async def plan_trip_endpoint(
             plan_trip,
             payload.user_goal,
             traveler_id=traveler,
-            constraints_hint=payload.constraints_hint,
+            constraints_hint={"saved_preferences": user.preferences or {} if user else {}, **payload.constraints_hint},
             max_iterations=payload.max_iterations,
         )
     except RuntimeError as e:
@@ -123,9 +123,11 @@ async def plan_trip_endpoint(
         try:
             trip = SuperTrip.model_validate(result["trip"])
             existing = db.get(SuperTripRecord, trip.super_trip_id)
+            if existing and existing.user_id != user.id:
+                raise HTTPException(403, "This trip belongs to another traveler.")
             if existing:
                 existing.payload_json = trip.model_dump(mode="json")
-                existing.title = f"{trip.global_constraints.home_location or 'Trip'} · {trip.super_trip_id}"[:200]
+                existing.title = f"{trip.global_constraints.destination or 'Trip'} · {trip.super_trip_id}"[:200]
                 existing.total_cost_usd = trip.total_cost_usd()
                 existing.max_budget_usd = trip.global_constraints.max_budget_usd
                 existing.node_count = len(trip.nodes)
@@ -136,8 +138,9 @@ async def plan_trip_endpoint(
                 record = existing
             else:
                 record = SuperTripRecord(
+                    id=trip.super_trip_id,
                     payload_json=trip.model_dump(mode="json"),
-                    title=f"{trip.global_constraints.home_location or 'Trip'} · {trip.super_trip_id}"[:200],
+                    title=f"{trip.global_constraints.destination or 'Trip'} · {trip.super_trip_id}"[:200],
                     total_cost_usd=trip.total_cost_usd(),
                     max_budget_usd=trip.global_constraints.max_budget_usd,
                     node_count=len(trip.nodes),
@@ -152,6 +155,8 @@ async def plan_trip_endpoint(
             persisted_id = record.id
             persisted_status = record.status.value
         except Exception:
+            db.rollback()
+            result.setdefault("warnings", []).append("Your plan could not be saved. Use Save trip to retry.")
             log.exception("Auto-persist failed (non-fatal)")
 
     return PlanTripResponse(**result, persisted_id=persisted_id, persisted_status=persisted_status)

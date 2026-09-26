@@ -1129,8 +1129,8 @@ export type PlanTripRequest = {
 export const agentsApi = {
   status: () =>
     request<{
-      gemini_configured: boolean;
-      gemini_model: string | null;
+      groq_configured: boolean;
+      groq_model: string | null;
       amadeus_configured: boolean;
       note: string;
     }>("/api/agents/status"),

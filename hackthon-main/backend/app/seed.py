@@ -351,7 +351,9 @@ def _seed_dependency_graph(db, traveler: User) -> None:
                                                                        v SEQUENCED
                                                                      HotelCheckOut --REQUIRES(120)--> FlightOut
     """
-    it = db.execute(select(Itinerary).where(Itinerary.title == "Kyoto Weekend")).scalar_one_or_none()
+    it = db.scalars(select(Itinerary).where(
+        Itinerary.title == "Kyoto Weekend", Itinerary.owner_id == traveler.id
+    ).order_by(Itinerary.id).limit(1)).first()
     if it is None:
         it = Itinerary(
             owner_id=traveler.id,
@@ -362,7 +364,7 @@ def _seed_dependency_graph(db, traveler: User) -> None:
         db.flush()
 
     # Skip if graph already seeded
-    if db.execute(select(ItineraryNode).where(ItineraryNode.itinerary_id == it.id)).scalar_one_or_none():
+    if db.scalar(select(ItineraryNode.id).where(ItineraryNode.itinerary_id == it.id).limit(1)):
         return
 
     now = datetime.now(timezone.utc)
@@ -470,9 +472,9 @@ def _seed_capacity(db) -> None:
     #
     # Skips seeding if a recent metric already exists so re-runs are cheap.
     now = datetime.now(timezone.utc)
-    already = db.execute(
-        select(CapacityMetric).where(CapacityMetric.recorded_at >= now - timedelta(minutes=5))
-    ).scalar_one_or_none()
+    already = db.scalar(
+        select(CapacityMetric.id).where(CapacityMetric.recorded_at >= now - timedelta(minutes=5)).limit(1)
+    )
     if already is None:
         curves = {
             "Gion":        [(60, 45), (45, 60), (30, 72), (15, 84), (0, 92)],   # rising steeply
@@ -511,7 +513,7 @@ def _seed_capacity(db) -> None:
         print("+ Gion concert event (ends in 20m)")
 
     # Nudges: one targeting Arashiyama, one generic
-    if not db.execute(select(Nudge)).scalar_one_or_none():
+    if not db.scalar(select(Nudge.id).limit(1)):
         arashi = zone_by_name["Arashiyama"]
         db.add(Nudge(
             kind=NudgeKind.DISCOUNT,

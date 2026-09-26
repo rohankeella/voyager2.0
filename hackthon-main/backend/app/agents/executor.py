@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import secrets
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
 
@@ -75,10 +74,6 @@ def _normalize_type(raw: str) -> NodeType:
         return NodeType.CUSTOM
 
 
-def _fake_pnr() -> str:
-    return secrets.token_hex(4).upper()
-
-
 # ---- per-node executors ---------------------------------------------------
 
 
@@ -116,13 +111,15 @@ async def _exec_flight(planner_node: dict, planner_draft: dict, day_start: datet
         location_label=f"{offer['origin_iata']} → {offer['destination_iata']}",
         lat=offer.get("destination_lat"),
         lng=offer.get("destination_lng"),
-        pnr_number=_fake_pnr(),
     )
     # Attach extra data via extra="allow"
     exec_data_dict = exec_data.model_dump()
     exec_data_dict.update(
         {
             "carrier_code": offer.get("carrier_code"),
+            "source": "estimate",
+            "origin_city": origin,
+            "destination_city": destination,
             "flight_number": offer.get("flight_number"),
             "stops": offer.get("stops", 0),
             "origin_iata": offer["origin_iata"],
@@ -285,7 +282,7 @@ def execute_node(state: AgentState) -> dict[str, Any]:
     """Convert Planner draft → final SuperTrip dict."""
     draft = state.get("draft_trip")
     if not draft:
-        return {"errors": ["Executor: no draft_trip in state"]}
+        return {"errors": state.get("errors") or ["Executor: no draft_trip in state"]}
 
     traveler_id = state.get("traveler_id") or "USR-anon"
     if not traveler_id.startswith("USR-"):
@@ -305,6 +302,7 @@ def execute_node(state: AgentState) -> dict[str, Any]:
 
     async def process_all() -> None:
         for idx, pnode in enumerate(planner_nodes):
+            warn = None
             node_type = _normalize_type(pnode.get("type", ""))
             kind_counters[node_type] = kind_counters.get(node_type, 0) + 1
             node_index = len(final_nodes) + 1
@@ -334,6 +332,15 @@ def execute_node(state: AgentState) -> dict[str, Any]:
 
             if warn:
                 warnings.append(warn)
+
+            # Activities previously had no coordinates and never appeared on the map.
+            if exec_data.lat is None or exec_data.lng is None:
+                city = pnode.get("location_city") or pnode.get("destination_city")
+                location = await resolve_location(city) if city else None
+                if location:
+                    exec_data.lat = location.get("lat")
+                    exec_data.lng = location.get("lng")
+            exec_data = NodeExecutionData(**{**exec_data.model_dump(), "source": "estimate", "location_city": pnode.get("location_city"), "coordinate_precision": "city"})
 
             depends_on = [
                 index_to_node_id[i]
@@ -434,6 +441,7 @@ def execute_node(state: AgentState) -> dict[str, Any]:
             "start_date": _iso_date_to_dt(draft["start_date"]).isoformat(),
             "end_date": _iso_date_to_dt(draft["end_date"], hour=22).isoformat(),
             "home_location": draft.get("home_location"),
+            "destination": draft.get("destination") or next((n.get("destination_city") for n in planner_nodes if n.get("destination_city")), None),
             "traveler_count": draft.get("traveler_count", 1),
             "preferences": {"tags": draft.get("preferences") or []},
         },

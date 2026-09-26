@@ -52,8 +52,8 @@ export default function AIAssistantPanel() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           message: trimmed,
-          history: nextMessages.map((m) => ({ role: m.role, content: m.text })),
-          context: buildTripContext(),
+          history: messages.filter((m) => !m.isError).slice(-10).map((m) => ({ role: m.role, content: m.text.slice(0, 4000) })),
+          context: buildTripContext().slice(0, 4000),
         }),
       });
       const data: { reply: string; configured?: boolean; error?: boolean } = await res.json();
@@ -84,19 +84,7 @@ export default function AIAssistantPanel() {
       {notConfigured && (
         <div className="mt-3 flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs text-amber-700">
           <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            Not connected yet — add <code className="font-mono">GEMINI_API_KEY</code> to{" "}
-            <code className="font-mono">.env.local</code> (free at{" "}
-            <a
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-amber-900"
-            >
-              aistudio.google.com/apikey
-            </a>
-            ) and restart the dev server.
-          </span>
+          <span>The travel assistant is not available yet. Please contact the site owner or try again later.</span>
         </div>
       )}
 
@@ -147,6 +135,8 @@ export default function AIAssistantPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           type="text"
+          aria-label="Message the travel assistant"
+          maxLength={2000}
           placeholder="Ask anything…"
           className="flex-1 rounded-full border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-dark placeholder:text-gray-400 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
         />

@@ -32,10 +32,9 @@ class Settings(BaseSettings):
     amadeus_client_secret: str | None = None
     amadeus_env: str = "test"
 
-    # Gemini — powers the Planner/Executor/Supervisor agents. Get a free key
-    # at https://aistudio.google.com/apikey. Free tier: 15 rpm, 1M tokens/day.
-    gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    # Groq Free plan supports this model. No paid provider fallback.
+    groq_api_key: str | None = None
+    groq_model: str = "openai/gpt-oss-20b"
 
     # OpenTripPlanner — Executor Agent queries this for ground-transit polylines
     # + stoptime cross-reference. Default: Digitransit's free public Finland

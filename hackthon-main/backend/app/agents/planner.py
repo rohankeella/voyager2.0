@@ -9,21 +9,22 @@ Executor's job. The Planner reasons about:
   • dependency order (depends_on_indices — positional refs into the draft)
   • rough cost budgets so Supervisor can early-reject over-budget drafts
 
-Output is a `PlannerDraft` (Pydantic), so we get schema-enforced JSON out of
-Gemini via LangChain's `with_structured_output()`.
+Output is a `PlannerDraft` (Pydantic), validated after Groq JSON generation.
 """
 
 from __future__ import annotations
 
 import logging
+import json
+import re
+from datetime import date, timedelta
 from typing import Any
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
+from fastapi import HTTPException
+from pydantic import BaseModel, Field, model_validator
 
 from app.agents.state import AgentState
-from app.config import get_settings
+from app.services.groq import complete
 
 log = logging.getLogger("agents.planner")
 
@@ -60,7 +61,7 @@ class PlannerNodeDraft(BaseModel):
     location_label: str | None = None
     start_day: int = Field(ge=1, le=60, description="1-indexed day of trip (day 1 is start_date)")
     start_hour: int = Field(ge=0, le=23, default=10)
-    duration_hours: float = Field(ge=0.5, le=24.0, default=2.0)
+    duration_hours: float = Field(ge=0.5, le=24.0 * 60, default=2.0)  # hotel stays span days
     estimated_cost_usd: float = Field(ge=0.0, default=0.0)
 
 
@@ -69,9 +70,24 @@ class PlannerDraft(BaseModel):
     start_date: str = Field(description="ISO date YYYY-MM-DD")
     end_date: str = Field(description="ISO date YYYY-MM-DD, strictly after start_date")
     home_location: str | None = None
+    destination: str | None = None
     traveler_count: int = Field(default=1, ge=1, le=20)
     preferences: list[str] = Field(default_factory=list, description="Free-form tags like 'art', 'food'")
     nodes: list[PlannerNodeDraft] = Field(min_length=2, max_length=30)
+
+    @model_validator(mode="after")
+    def validate_schedule(self):
+        start, end = date.fromisoformat(self.start_date), date.fromisoformat(self.end_date)
+        if start < date.today():
+            raise ValueError("Choose future travel dates; the start date is in the past.")
+        if end < start or (end - start).days >= 60:
+            raise ValueError("Trip dates must span 1 to 60 days in chronological order.")
+        for index, node in enumerate(self.nodes):
+            if node.start_day > (end - start).days + 1:
+                raise ValueError("An itinerary stop falls outside the requested dates.")
+            if any(dep < 0 or dep >= index for dep in node.depends_on_indices):
+                raise ValueError("Each dependency must refer to an earlier itinerary stop.")
+        return self
 
 
 # ---- system prompt --------------------------------------------------------
@@ -99,6 +115,11 @@ RULES YOU MUST FOLLOW:
    or transfer that got the traveler to that city).
 8. Return HOME as the last flight — its origin_city = trip destination, destination_city = home.
 9. Avoid over-packing days. Max 3-4 activities per day, with meals between.
+10. Respect the exact requested duration: a 5-day trip ends start_date + 4 days.
+    Use future dates, never dates from examples. Structured travel dates are binding.
+11. Set destination to the city being visited, not the home/departure city.
+    Prefer saved travel preferences unless the current request overrides them.
+12. Prices and transport schedules are estimates, not live availability or reservations.
 
 EXAMPLE for "5-day Paris trip from Bangalore, $2500 budget, love art":
   Day 1: flight BLR→CDG, ground transfer CDG→hotel, hotel checkin
@@ -108,24 +129,6 @@ EXAMPLE for "5-day Paris trip from Bangalore, $2500 budget, love art":
   Day 5: hotel checkout, ground transfer to CDG, flight CDG→BLR
 
 Return ONLY the PlannerDraft JSON — no prose, no markdown."""
-
-
-# ---- llm factory ----------------------------------------------------------
-
-
-def _get_llm() -> ChatGoogleGenerativeAI:
-    settings = get_settings()
-    if not settings.gemini_api_key:
-        raise RuntimeError(
-            "GEMINI_API_KEY is not set in backend/.env — Planner Agent cannot run. "
-            "Get a free key at https://aistudio.google.com/apikey."
-        )
-    return ChatGoogleGenerativeAI(
-        model=settings.gemini_model,
-        google_api_key=settings.gemini_api_key,
-        temperature=0.6,
-        max_output_tokens=4096,
-    )
 
 
 # ---- LangGraph node -------------------------------------------------------
@@ -141,7 +144,10 @@ def plan_node(state: AgentState) -> dict[str, Any]:
     prior_errors = state.get("errors") or []
 
     # Build the user message
-    user_lines = [f"Traveler goal: {user_goal}"]
+    user_lines = [f"Today: {date.today().isoformat()}. If no dates are specified, start on {(date.today() + timedelta(days=30)).isoformat()}.", f"Traveler goal: {user_goal}"]
+    duration = re.search(r"\b(\d{1,2})[ -]*days?\b", user_goal, re.I)
+    if duration:
+        user_lines.append(f"Required duration: {duration.group(1)} calendar days, including departure and return.")
     if hint:
         user_lines.append(f"Structured hints: {hint}")
     if prior_errors:
@@ -153,15 +159,25 @@ def plan_node(state: AgentState) -> dict[str, Any]:
 
     log.info("Planner iteration=%s goal=%s", state.get("iteration", 0), user_goal[:80])
 
-    llm = _get_llm().with_structured_output(PlannerDraft)
     try:
-        draft: PlannerDraft = llm.invoke(
-            [SystemMessage(content=_SYSTEM), HumanMessage(content=user_message)]
-        )
+        draft = PlannerDraft.model_validate_json(complete([
+            {"role": "system", "content": _SYSTEM + "\nJSON schema:\n" + json.dumps(PlannerDraft.model_json_schema())},
+            {"role": "user", "content": user_message},
+        ], json_mode=True))
+        if hint.get("start_date") and draft.start_date != hint["start_date"]:
+            raise ValueError("Use the traveler's selected start_date exactly.")
+        if hint.get("end_date") and draft.end_date != hint["end_date"]:
+            raise ValueError("Use the traveler's selected end_date exactly.")
+        if duration and not hint.get("end_date") and (date.fromisoformat(draft.end_date) - date.fromisoformat(draft.start_date)).days + 1 != int(duration.group(1)):
+            raise ValueError(f"Use exactly {duration.group(1)} calendar days, including departure and return.")
     except Exception as e:
-        log.exception("Planner LLM call failed")
+        log.warning("Planner LLM call failed: %s", type(e).__name__)
         return {
-            "errors": [f"Planner LLM error: {type(e).__name__}: {e}"],
+            "errors": [str(e.detail) if isinstance(e, HTTPException) else f"Planner draft needs correction: {str(e)[:400]}"],
+            "draft_trip": {},
+            "trip": None,
+            # Provider failures will not improve by spending more free-tier quota.
+            "max_iterations": state.get("iteration", 0) + 1 if isinstance(e, HTTPException) else state.get("max_iterations", 3),
             "iteration": state.get("iteration", 0) + 1,
         }
 

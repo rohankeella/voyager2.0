@@ -6,6 +6,9 @@
  * globe projection. Also handles anti-meridian crossing by unwrapping longitudes.
  */
 
+import type { FeatureCollection, LineString } from "geojson";
+import type { StyleSpecification } from "maplibre-gl";
+
 export type LngLat = [number, number];
 
 /**
@@ -76,16 +79,46 @@ export function boundsFor(coords: LngLat[], padDeg = 5): [[number, number], [num
   ];
 }
 
+/** Meridians and parallels every 30° — the faint grid that gives the globe its curvature. */
+function graticule(): FeatureCollection<LineString> {
+  const lines: LngLat[][] = [];
+  for (let lng = -180; lng < 180; lng += 30) {
+    lines.push(Array.from({ length: 37 }, (_, i) => [lng, -90 + i * 5] as LngLat));
+  }
+  for (let lat = -60; lat <= 60; lat += 30) {
+    lines.push(Array.from({ length: 73 }, (_, i) => [-180 + i * 5, lat] as LngLat));
+  }
+  return {
+    type: "FeatureCollection",
+    features: lines.map((coordinates) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates } })),
+  };
+}
+
 /**
- * Resolve the MapLibre style URL. Prefers MapTiler if a key is set (prettier,
- * proper vector tiles) else falls back to OpenFreeMap (fully free, no signup).
+ * Resolve the map style. Prefers MapTiler streets if a key is set; otherwise a
+ * local "teal night" globe from Natural Earth land (public/maps), so the globe
+ * never depends on an external tile server.
  */
-export function resolveMapStyle(): string {
+export function resolveMapStyle(): string | StyleSpecification {
   const key = process.env.NEXT_PUBLIC_MAPTILER_KEY?.trim();
   if (key) {
     return `https://api.maptiler.com/maps/streets-v2/style.json?key=${encodeURIComponent(key)}`;
   }
-  return "https://tiles.openfreemap.org/styles/liberty";
+  return {
+    version: 8,
+    projection: { type: "globe" },
+    sky: { "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0] },
+    sources: {
+      land: { type: "geojson", data: "/maps/land.geojson" },
+      graticule: { type: "geojson", data: graticule() },
+    },
+    layers: [
+      { id: "ocean", type: "background", paint: { "background-color": "#0a2c30" } },
+      { id: "graticule", type: "line", source: "graticule", paint: { "line-color": "#5eead4", "line-opacity": 0.09, "line-width": 0.6 } },
+      { id: "land", type: "fill", source: "land", paint: { "fill-color": "#164440" } },
+      { id: "coast", type: "line", source: "land", paint: { "line-color": "#2f7a70", "line-width": 0.8 } },
+    ],
+  };
 }
 
 /**

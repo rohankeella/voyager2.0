@@ -56,7 +56,7 @@ def _parse_iso(value: Any) -> datetime | None:
 def supervise_node(state: AgentState) -> dict[str, Any]:
     trip = state.get("trip")
     if not trip:
-        return {"errors": (state.get("errors") or []) + ["Supervisor: no trip to validate"]}
+        return {"errors": state.get("errors") or ["Supervisor: no trip to validate"]}
 
     errors: list[str] = []
     warnings: list[str] = list(state.get("warnings") or [])

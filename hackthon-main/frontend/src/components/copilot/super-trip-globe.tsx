@@ -3,29 +3,27 @@
 /**
  * DTO-P3 Phase 3 — 3D globe rendering of the SuperTrip DAG.
  *
- * Renders:
- *   • Flight edges as curved great-circle arcs (sky blue, dashed)
- *   • Ground transfer edges as straight polylines (slate, thin)
- *   • Hotel/activity/meal nodes as coloured markers
- *   • Airport nodes as filled circles anchored to flight endpoints
- *
- * Uses MapLibre GL v6's `projection: 'globe'` for a real sphere. Free
- * OpenFreeMap tiles by default; MapTiler if NEXT_PUBLIC_MAPTILER_KEY is set.
- *
- * The parent controls the highlighted node via `focusNodeId` — we call
- * `flyTo` when it changes so hovering the preview pane pans the globe.
+ * Flights draw as great-circle arcs, ground transfers as dashed polylines, and
+ * hotels/activities/meals as category-coloured markers on a MapLibre globe.
+ * With no trip it idles on the empty globe so the stage is never a blank box.
+ * The parent controls the highlighted node via `focusNodeId`.
  */
 
 import { useCallback, useEffect, useImperativeHandle, useRef, forwardRef } from "react";
 import * as maplibregl from "maplibre-gl";
-import type { GeoJSONSource, LngLatBoundsLike, Map as MLMap } from "maplibre-gl";
+import type { ExpressionSpecification, GeoJSONSource, LngLatBoundsLike, Map as MLMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
+import { Maximize2, Minus, Plus } from "lucide-react";
 import type { SuperTrip, TripNode } from "@/lib/api";
 import { boundsFor, decodeTransitGeometry, greatCircle, resolveMapStyle, type LngLat } from "@/lib/geo";
 
+// Next.js cannot infer the worker's sibling module from the bundled library URL.
+maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+
 type Props = {
-  trip: SuperTrip;
+  trip: SuperTrip | null;
+  planning?: boolean;
   focusNodeId?: string | null;
   onNodeClick?: (nodeId: string) => void;
 };
@@ -173,40 +171,96 @@ function buildFeatures(trip: SuperTrip): {
   };
 }
 
+// Category colours mirror the itinerary rows (sky/amber/emerald/rose/indigo/slate),
+// one step brighter so they read against the teal night globe.
+const CATEGORY_COLOR: ExpressionSpecification = [
+  "match",
+  ["get", "category"],
+  "flight", "#38bdf8",
+  "hotel", "#fbbf24",
+  "activity", "#34d399",
+  "meal", "#fb7185",
+  "guide", "#818cf8",
+  "transfer", "#94a3b8",
+  /* default */ "#cbd5e1",
+];
+
+const IDLE_CENTER: LngLat = [48, 22];
+
+/** Zoom at which the whole globe spans ~70% of the pane's shorter side (radius ≈ 512·2^z / 2π px). */
+function idleZoom(el: HTMLElement | null): number {
+  const side = el ? Math.min(el.clientWidth, el.clientHeight) : 480;
+  return Math.max(0.6, Math.log2((0.7 * side * Math.PI) / 512));
+}
+
+const LEGEND = [
+  { label: "Flights", color: "bg-sky-400" },
+  { label: "Hotels", color: "bg-amber-400" },
+  { label: "Activities", color: "bg-emerald-400" },
+  { label: "Meals", color: "bg-rose-400" },
+];
+
+function motionMs(ms: number): number {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : ms;
+}
+
+function fmtRange(start: string, end: string): string {
+  const s = new Date(start);
+  const e = new Date(end);
+  if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) return "";
+  const opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" };
+  return `${s.toLocaleDateString(undefined, opts)} – ${e.toLocaleDateString(undefined, { ...opts, year: "numeric" })}`;
+}
+
 const SuperTripGlobe = forwardRef<SuperTripGlobeHandle, Props>(function SuperTripGlobe(
-  { trip, focusNodeId, onNodeClick },
+  { trip, planning, focusNodeId, onNodeClick },
   ref,
 ) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MLMap | null>(null);
   const styleReadyRef = useRef(false);
   const popupRef = useRef<maplibregl.Popup | null>(null);
+  const boundsRef = useRef<LngLatBoundsLike | null>(null);
+  const onNodeClickRef = useRef(onNodeClick);
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+  }, [onNodeClick]);
 
   useImperativeHandle(
     ref,
     (): SuperTripGlobeHandle => ({
       flyTo: (lng, lat, zoom = 4.5) => {
-        mapRef.current?.flyTo({ center: [lng, lat], zoom, essential: true, duration: 1400 });
+        mapRef.current?.flyTo({ center: [lng, lat], zoom, essential: true, duration: motionMs(1400) });
       },
     }),
     [],
   );
 
+  const fitRoute = useCallback(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (boundsRef.current) {
+      map.fitBounds(boundsRef.current, { padding: 72, duration: motionMs(1200), maxZoom: 5.5 });
+    } else {
+      map.easeTo({ center: IDLE_CENTER, zoom: idleZoom(container.current), duration: motionMs(1200) });
+    }
+  }, []);
+
   const applyFeatures = useCallback(() => {
     const map = mapRef.current;
     if (!map || !styleReadyRef.current) return;
 
-    const { arcs, ground, nodes, fitCoords } = buildFeatures(trip);
+    const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
+    const built = trip ? buildFeatures(trip) : null;
 
-    (map.getSource(SRC_ARCS) as GeoJSONSource | undefined)?.setData(arcs);
-    (map.getSource(SRC_GROUND) as GeoJSONSource | undefined)?.setData(ground);
-    (map.getSource(SRC_NODES) as GeoJSONSource | undefined)?.setData(nodes);
+    (map.getSource(SRC_ARCS) as GeoJSONSource | undefined)?.setData(built?.arcs ?? empty);
+    (map.getSource(SRC_GROUND) as GeoJSONSource | undefined)?.setData(built?.ground ?? empty);
+    (map.getSource(SRC_NODES) as GeoJSONSource | undefined)?.setData(built?.nodes ?? empty);
 
-    if (fitCoords.length > 0) {
-      const b = boundsFor(fitCoords, 8);
-      map.fitBounds(b as LngLatBoundsLike, { padding: 60, duration: 1200, maxZoom: 6 });
-    }
-  }, [trip]);
+    boundsRef.current =
+      built && built.fitCoords.length > 0 ? (boundsFor(built.fitCoords, 6) as LngLatBoundsLike) : null;
+    fitRoute();
+  }, [trip, fitRoute]);
 
   // Mount the map once.
   useEffect(() => {
@@ -215,118 +269,72 @@ const SuperTripGlobe = forwardRef<SuperTripGlobeHandle, Props>(function SuperTri
     const map = new maplibregl.Map({
       container: container.current,
       style: resolveMapStyle(),
-      center: [77.59, 12.97], // Bangalore, default view
-      zoom: 1.5,
-      pitch: 0,
-      bearing: 0,
-      attributionControl: { compact: true },
+      center: IDLE_CENTER,
+      zoom: idleZoom(container.current),
+      attributionControl: false,
     });
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     mapRef.current = map;
 
     map.on("load", () => {
+      // The local style declares the globe itself; MapTiler styles need it set.
       map.setProjection({ type: "globe" });
       styleReadyRef.current = true;
-      // set atmospheric sky on the globe when supported (skipped if style overrides)
-      try {
-        (map as unknown as { setSky: (s: unknown) => void }).setSky?.({
-          "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 0],
-        });
-      } catch {
-        /* older MapLibre — noop */
-      }
 
-      // Sources — start empty; applyFeatures will fill.
       const empty: FeatureCollection = { type: "FeatureCollection", features: [] };
       map.addSource(SRC_ARCS, { type: "geojson", data: empty, lineMetrics: true });
       map.addSource(SRC_GROUND, { type: "geojson", data: empty });
       map.addSource(SRC_NODES, { type: "geojson", data: empty });
 
-      // Ground transfer layer — thin slate line, drawn under arcs so arcs pop.
       map.addLayer({
         id: "supertrip-ground-line",
         type: "line",
         source: SRC_GROUND,
-        paint: {
-          "line-color": "#64748b",
-          "line-width": 2,
-          "line-opacity": 0.8,
-          "line-dasharray": [3, 2],
-        },
+        paint: { "line-color": "#cbd5e1", "line-width": 1.6, "line-opacity": 0.75, "line-dasharray": [2, 2] },
       });
-
-      // Flight arc glow (wide translucent)
       map.addLayer({
         id: "supertrip-arc-glow",
         type: "line",
         source: SRC_ARCS,
-        paint: {
-          "line-color": "#38bdf8",
-          "line-width": 6,
-          "line-opacity": 0.25,
-          "line-blur": 3,
-        },
+        layout: { "line-cap": "round" },
+        paint: { "line-color": "#38bdf8", "line-width": 9, "line-opacity": 0.22, "line-blur": 5 },
       });
-
-      // Flight arc solid
       map.addLayer({
         id: "supertrip-arc-line",
         type: "line",
         source: SRC_ARCS,
-        paint: {
-          "line-color": "#0ea5e9",
-          "line-width": 2.5,
-          "line-opacity": 0.9,
-        },
+        layout: { "line-cap": "round" },
+        paint: { "line-color": "#7dd3fc", "line-width": 2.2, "line-opacity": 0.95 },
       });
-
-      // Node markers — coloured by category
       map.addLayer({
         id: "supertrip-node-halo",
         type: "circle",
         source: SRC_NODES,
-        paint: {
-          "circle-radius": 10,
-          "circle-color": "#ffffff",
-          "circle-opacity": 0.6,
-          "circle-stroke-color": [
-            "match",
-            ["get", "category"],
-            "hotel", "#f59e0b",
-            "activity", "#10b981",
-            "meal", "#e11d48",
-            "guide", "#6366f1",
-            "flight", "#0ea5e9",
-            "transfer", "#64748b",
-            /* default */ "#9ca3af",
-          ],
-          "circle-stroke-width": 1.5,
-        },
+        paint: { "circle-radius": 10, "circle-color": CATEGORY_COLOR, "circle-opacity": 0.18, "circle-blur": 0.4 },
       });
-
       map.addLayer({
         id: "supertrip-node-dot",
         type: "circle",
         source: SRC_NODES,
         paint: {
-          "circle-radius": 5,
-          "circle-color": [
-            "match",
-            ["get", "category"],
-            "hotel", "#f59e0b",
-            "activity", "#10b981",
-            "meal", "#e11d48",
-            "guide", "#6366f1",
-            "flight", "#0ea5e9",
-            "transfer", "#64748b",
-            /* default */ "#9ca3af",
-          ],
-          "circle-stroke-color": "#ffffff",
+          "circle-radius": 4.5,
+          "circle-color": CATEGORY_COLOR,
+          "circle-stroke-color": "#ecfeff",
           "circle-stroke-width": 1.5,
         },
       });
+      map.addLayer({
+        id: "supertrip-node-focus",
+        type: "circle",
+        source: SRC_NODES,
+        filter: ["==", ["get", "node_id"], ""],
+        paint: {
+          "circle-radius": 11,
+          "circle-opacity": 0,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
 
-      // Interactions
       map.on("mouseenter", "supertrip-node-dot", () => {
         map.getCanvas().style.cursor = "pointer";
       });
@@ -339,7 +347,7 @@ const SuperTripGlobe = forwardRef<SuperTripGlobeHandle, Props>(function SuperTri
         const f = e.features?.[0];
         if (!f || !f.properties) return;
         const g = f.geometry as Point;
-        const p = f.properties as { title?: string; location_label?: string; cost_usd?: number; category?: string };
+        const p = f.properties as { title?: string; location_label?: string; cost_usd?: number };
         popupRef.current?.remove();
         popupRef.current = new maplibregl.Popup({
           closeButton: false,
@@ -349,21 +357,19 @@ const SuperTripGlobe = forwardRef<SuperTripGlobeHandle, Props>(function SuperTri
         })
           .setLngLat(g.coordinates as [number, number])
           .setHTML(
-            `<div style="font-family:system-ui;font-size:12px;line-height:1.35">
-              <div style="font-weight:600;color:#111">${escapeHtml(p.title ?? "")}</div>
-              <div style="color:#6b7280">${escapeHtml(p.location_label ?? "")}</div>
-              ${typeof p.cost_usd === "number" ? `<div style="color:#0ea5e9;font-weight:600">$${p.cost_usd.toFixed(0)}</div>` : ""}
+            `<div style="font-family:inherit;font-size:12px;line-height:1.35">
+              <div style="font-weight:600;color:#0f172a">${escapeHtml(p.title ?? "")}</div>
+              <div style="color:#475569">${escapeHtml(p.location_label ?? "")}</div>
+              ${typeof p.cost_usd === "number" ? `<div style="color:#0f766e;font-weight:600">$${p.cost_usd.toFixed(0)}</div>` : ""}
             </div>`,
           )
           .addTo(map);
       });
       map.on("click", "supertrip-node-dot", (e) => {
-        const f = e.features?.[0];
-        const props = f?.properties as { node_id?: string } | undefined;
-        if (props?.node_id) onNodeClick?.(props.node_id);
+        const props = e.features?.[0]?.properties as { node_id?: string } | undefined;
+        if (props?.node_id) onNodeClickRef.current?.(props.node_id);
       });
 
-      // First paint
       applyFeatures();
     });
 
@@ -381,31 +387,94 @@ const SuperTripGlobe = forwardRef<SuperTripGlobeHandle, Props>(function SuperTri
     applyFeatures();
   }, [applyFeatures]);
 
-  // Fly to focused node when parent changes it.
+  // Highlight and fly to the node focused from the itinerary.
   useEffect(() => {
-    if (!focusNodeId || !mapRef.current || !styleReadyRef.current) return;
+    const map = mapRef.current;
+    if (!map || !styleReadyRef.current) return;
+    map.setFilter("supertrip-node-focus", ["==", ["get", "node_id"], focusNodeId ?? ""]);
+    if (!focusNodeId || !trip) return;
     const node = trip.nodes.find((n) => n.node_id === focusNodeId);
     const coord = node ? nodeCoord(node) || (edgeCoords(node)?.to ?? null) : null;
-    if (coord) {
-      mapRef.current.flyTo({ center: coord, zoom: 5.5, essential: true, duration: 1200 });
-    }
+    if (coord) map.flyTo({ center: coord, zoom: 5, essential: true, duration: motionMs(1200) });
   }, [focusNodeId, trip]);
 
+  const g = trip?.global_constraints;
+  const from = g?.home_location?.split(",")[0];
+  const to = g?.destination?.split(",")[0];
+
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-3xl border border-gray-100 bg-slate-950 shadow-sm">
-      <div ref={container} className="absolute inset-0" />
-      <div className="pointer-events-none absolute left-3 top-3 rounded-lg bg-black/40 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-white/90 backdrop-blur">
-        SuperTrip · {trip.super_trip_id}
+    <div className="relative h-full w-full overflow-hidden rounded-2xl bg-[radial-gradient(110%_85%_at_50%_42%,#0f3b3d_0%,#082830_42%,#031017_100%)] shadow-[0_18px_40px_-24px_rgba(4,23,26,0.7)]">
+      {/* h-full, not absolute inset-0: maplibregl-map CSS forces position:relative, collapsing it to 0px */}
+      <div ref={container} className="h-full w-full" role="region" aria-label="Trip route map" />
+
+      {trip && g && (
+        <div className="pointer-events-none absolute left-4 top-4 max-w-[calc(100%-6rem)] rounded-xl bg-[#031017]/70 px-3.5 py-2.5 ring-1 ring-white/10">
+          <div className="truncate text-sm font-semibold text-white">
+            {from && to ? (
+              <>
+                {from} <span className="text-teal-300">→</span> {to}
+              </>
+            ) : (
+              to || from || "Your trip"
+            )}
+          </div>
+          <div className="mt-0.5 text-xs tabular-nums text-teal-100/75">
+            {fmtRange(g.start_date, g.end_date)} · {trip.nodes.length} stop{trip.nodes.length === 1 ? "" : "s"}
+          </div>
+        </div>
+      )}
+
+      <div className="absolute right-4 top-4 flex flex-col divide-y divide-white/10 overflow-hidden rounded-xl bg-[#031017]/70 ring-1 ring-white/10">
+        <MapButton label="Zoom in" onClick={() => mapRef.current?.zoomIn({ duration: motionMs(300) })}>
+          <Plus className="h-4 w-4" />
+        </MapButton>
+        <MapButton label="Zoom out" onClick={() => mapRef.current?.zoomOut({ duration: motionMs(300) })}>
+          <Minus className="h-4 w-4" />
+        </MapButton>
+        <MapButton label={trip ? "Fit whole route" : "Reset view"} onClick={fitRoute}>
+          <Maximize2 className="h-3.5 w-3.5" />
+        </MapButton>
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 flex gap-3 rounded-lg bg-black/40 px-3 py-1.5 text-[10px] text-white/90 backdrop-blur">
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-400" />Flights</span>
-        <span className="flex items-center gap-1"><span className="h-1 w-3 rounded bg-slate-400" style={{ borderTop: "1px dashed" }} />Ground</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400" />Hotels</span>
-        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-400" />Activities</span>
-      </div>
+
+      {trip ? (
+        <ul className="pointer-events-none absolute bottom-4 left-4 flex flex-wrap gap-x-3 gap-y-1 rounded-xl bg-[#031017]/70 px-3 py-2 text-[11px] text-teal-50/85 ring-1 ring-white/10">
+          {LEGEND.map((l) => (
+            <li key={l.label} className="flex items-center gap-1.5">
+              <span className={`h-2 w-2 rounded-full ${l.color}`} />
+              {l.label}
+            </li>
+          ))}
+          <li className="flex items-center gap-1.5">
+            <span className="w-3 border-t border-dashed border-slate-300" />
+            Ground
+          </li>
+        </ul>
+      ) : (
+        <div className="pointer-events-none absolute inset-x-4 bottom-6 flex justify-center">
+          <p className="max-w-sm rounded-xl bg-[#031017]/70 px-4 py-2.5 text-center text-xs leading-relaxed text-teal-50/85 ring-1 ring-white/10">
+            {planning
+              ? "Planning your route… it will be drawn here as soon as the agents finish."
+              : "Describe a trip in the chat. Flights, transfers, stays and stops will be drawn on this globe."}
+          </p>
+        </div>
+      )}
     </div>
   );
 });
+
+function MapButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="flex h-9 w-9 items-center justify-center text-teal-50/80 transition-colors duration-150 hover:bg-white/10 hover:text-white focus-visible:bg-white/15 focus-visible:text-white focus-visible:outline-none"
+    >
+      {children}
+    </button>
+  );
+}
 
 function escapeHtml(s: string): string {
   return s

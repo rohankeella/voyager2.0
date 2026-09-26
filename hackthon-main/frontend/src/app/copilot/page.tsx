@@ -7,29 +7,26 @@
  * Center  → interactive 3D globe rendering the DAG (arcs + polylines + markers)
  * Right   → SuperTrip preview with HITL "Review & Approve" cards
  *
- * All three panes stay synchronized: chat generates a plan → globe pans over
- * it → clicking a node in either the preview or the globe focuses it in the
- * other. When the user is signed in, the plan is auto-persisted for the
- * dashboard + operator Gantt (Phase 4).
+ * On desktop the three panes share one viewport (no page scroll); the chat
+ * thread and itinerary scroll inside their own panes. Below `lg` they stack.
+ * Clicking a node in either the preview or the globe focuses it in the other.
+ * When the user is signed in, the plan is auto-persisted for the dashboard.
  */
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Sparkles, ArrowLeft, LogIn, Globe as GlobeIcon } from "lucide-react";
+import { Sparkles, ArrowLeft, LogIn } from "lucide-react";
 import CopilotChat from "@/components/copilot/copilot-chat";
-import SuperTripPreview from "@/components/copilot/super-trip-preview";
-import { getStoredUser, type PlanTripResponse, type ApiUser, type SuperTripDetail } from "@/lib/api";
+import SuperTripPreview, { PreviewEmpty, PreviewSkeleton } from "@/components/copilot/super-trip-preview";
+import { getStoredUser, type PlanTripResponse, type ApiUser } from "@/lib/api";
 
 // Globe is client-only (MapLibre depends on window/WebGL) — dynamic import.
 const SuperTripGlobe = dynamic(() => import("@/components/copilot/super-trip-globe"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full items-center justify-center rounded-3xl border border-gray-100 bg-slate-950 text-white/70">
-      <div className="flex flex-col items-center gap-2">
-        <GlobeIcon className="h-6 w-6 animate-pulse" />
-        <span className="text-xs">Loading globe…</span>
-      </div>
+    <div className="flex h-full items-center justify-center rounded-2xl bg-[radial-gradient(110%_85%_at_50%_42%,#0f3b3d_0%,#082830_42%,#031017_100%)]">
+      <span className="text-xs text-teal-50/70">Loading globe…</span>
     </div>
   ),
 });
@@ -47,144 +44,91 @@ export default function CopilotPage() {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [planResult, setPlanResult] = useState<PlanResult | null>(null);
   const [focusNodeId, setFocusNodeId] = useState<string | null>(null);
+  const [planning, setPlanning] = useState(false);
 
   useEffect(() => {
+    // localStorage is client-only; reading it during render would mismatch the server HTML.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUser(getStoredUser());
   }, []);
 
   // Reset focus when a new plan arrives so the globe re-fits from scratch.
-  useEffect(() => {
+  const handlePlan = (result: PlanResult) => {
+    setPlanResult(result);
     setFocusNodeId(null);
-  }, [planResult?.trip?.super_trip_id]);
-
-  const handleApproved = (_record: SuperTripDetail) => {
-    // Approval is confirmed inside SuperTripPreview; nothing extra to do here yet.
   };
 
   const trip = planResult?.trip ?? null;
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      {/* header */}
-      <header className="border-b border-gray-100 bg-white">
-        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-3">
+    <div className="flex min-h-dvh flex-col bg-background lg:h-dvh lg:overflow-hidden">
+      <header className="shrink-0 border-b border-slate-200/80 bg-white">
+        <div className="flex h-14 items-center justify-between gap-4 px-3 lg:px-4">
+          <div className="flex min-w-0 items-center gap-3">
             <Link
               href="/dashboard"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 hover:border-primary hover:text-primary"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-slate-500 transition-colors duration-150 hover:bg-slate-100 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
               aria-label="Back to dashboard"
             >
               <ArrowLeft className="h-4 w-4" />
             </Link>
-            <div className="flex items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <Sparkles className="h-4 w-4" />
-              </span>
-              <div>
-                <h1 className="text-sm font-bold text-dark">AI Trip Co-Pilot</h1>
-                <p className="text-[11px] text-gray-500">
-                  Multi-agent DAG planner · 3D globe · Powered by Gemini
-                </p>
-              </div>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+              <Sparkles className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h1 className="text-sm font-semibold leading-tight text-slate-900">AI Trip Co-Pilot</h1>
+              <p className="truncate text-xs text-slate-500">
+                Multi-agent DAG planner · 3D globe · Powered by Groq
+              </p>
             </div>
           </div>
-          <div>
-            {user ? (
-              <div className="text-xs text-gray-500">
-                Signed in as <span className="font-semibold text-dark">{user.full_name}</span>
-              </div>
-            ) : (
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary/90"
-              >
-                <LogIn className="h-3 w-3" /> Sign in to save
-              </Link>
-            )}
-          </div>
+          {user ? (
+            <div className="hidden shrink-0 text-xs text-slate-500 sm:block">
+              Signed in as <span className="font-semibold text-slate-900">{user.full_name}</span>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-xs font-semibold text-white transition-colors duration-150 hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2"
+            >
+              <LogIn className="h-3.5 w-3.5" /> Sign in to save
+            </Link>
+          )}
         </div>
       </header>
 
-      {/* tripartite layout */}
-      <main className="mx-auto grid w-full max-w-[1600px] flex-1 gap-4 p-4 lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)_minmax(300px,420px)] lg:p-5">
-        {/* Chat */}
-        <div className="min-h-[420px] lg:min-h-[calc(100vh-6rem)]">
+      <main className="grid flex-1 gap-3 p-3 lg:min-h-0 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)_minmax(340px,400px)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)_420px]">
+        <section aria-label="Chat with the co-pilot" className="h-[72dvh] min-h-[28rem] lg:h-auto lg:min-h-0">
           <CopilotChat
             samplePrompts={SAMPLE_PROMPTS}
             hasPlan={!!trip}
-            onPlan={setPlanResult}
+            onPlan={handlePlan}
+            onBusyChange={setPlanning}
           />
-        </div>
+        </section>
 
-        {/* Globe */}
-        <div className="min-h-[420px] lg:min-h-[calc(100vh-6rem)]">
-          {trip ? (
-            <SuperTripGlobe
-              trip={trip}
-              focusNodeId={focusNodeId}
-              onNodeClick={setFocusNodeId}
-            />
-          ) : (
-            <GlobeEmpty />
-          )}
-        </div>
+        <section aria-label="Route globe" className="h-[60dvh] min-h-[22rem] lg:h-auto lg:min-h-0">
+          <SuperTripGlobe trip={trip} planning={planning} focusNodeId={focusNodeId} onNodeClick={setFocusNodeId} />
+        </section>
 
-        {/* Preview */}
-        <div className="min-h-[420px] lg:min-h-[calc(100vh-6rem)]">
-          {planResult?.trip ? (
+        <section aria-label="Itinerary" className="h-[85dvh] min-h-[28rem] lg:h-auto lg:min-h-0">
+          {planning ? (
+            <PreviewSkeleton />
+          ) : planResult?.trip ? (
             <SuperTripPreview
               trip={planResult.trip}
               persistedId={planResult.persisted_id}
               hitlRequired={planResult.hitl_required}
               hitlReason={planResult.hitl_reason}
               warnings={planResult.warnings}
-              onApproved={handleApproved}
               onFocusNode={setFocusNodeId}
               focusNodeId={focusNodeId}
             />
           ) : (
             <PreviewEmpty />
           )}
-        </div>
+        </section>
       </main>
     </div>
   );
-}
-
-function GlobeEmpty() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center overflow-hidden rounded-3xl border-2 border-dashed border-gray-200 bg-white p-8 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <GlobeIcon className="h-6 w-6" />
-      </span>
-      <h2 className="mt-4 text-base font-bold text-dark">Globe will render your trip here</h2>
-      <p className="mt-2 max-w-sm text-xs text-gray-500">
-        Once the Planner generates a DAG, this pane visualizes flight arcs as great-circles,
-        ground transfers as polylines, and hotels/activities as coloured markers on a real 3D globe.
-      </p>
-    </div>
-  );
-}
-
-function PreviewEmpty() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center rounded-3xl border-2 border-dashed border-gray-200 bg-white p-8 text-center">
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
-        <Sparkles className="h-6 w-6" />
-      </span>
-      <h2 className="mt-4 text-base font-bold text-dark">Ask the co-pilot to plan a trip</h2>
-      <p className="mt-2 max-w-sm text-xs text-gray-500">
-        Describe your ideal getaway on the left. High-value bookings surface here as Review & Approve cards.
-      </p>
-      <div className="mt-6 grid grid-cols-3 gap-2 text-[10px] text-gray-400">
-        <StepBadge label="1 · Planner" />
-        <StepBadge label="2 · Executor" />
-        <StepBadge label="3 · Supervisor" />
-      </div>
-    </div>
-  );
-}
-
-function StepBadge({ label }: { label: string }) {
-  return <div className="rounded-full border border-gray-200 px-2 py-1 font-mono">{label}</div>;
 }

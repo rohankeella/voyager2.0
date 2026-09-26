@@ -61,8 +61,8 @@ def _validate_super_trip(payload: dict) -> SuperTrip:
 def _derive_title(trip: SuperTrip, override: str | None = None) -> str:
     if override:
         return override[:200]
-    home = trip.global_constraints.home_location or "Trip"
-    days = (trip.global_constraints.end_date - trip.global_constraints.start_date).days
+    home = trip.global_constraints.destination or "Trip"
+    days = (trip.global_constraints.end_date.date() - trip.global_constraints.start_date.date()).days + 1
     return f"{home} · {days}-day plan · {trip.super_trip_id}"[:200]
 
 
@@ -78,6 +78,10 @@ def create_super_trip(
     # (typical for /copilot: user re-plans same trip in one session).
     existing = db.get(SuperTripRecord, trip.super_trip_id)
     if existing:
+        if not user or existing.user_id != user.id:
+            raise HTTPException(status_code=403, detail="not your trip")
+        if existing.status not in (SuperTripStatus.DRAFT, SuperTripStatus.PENDING_REVIEW):
+            raise HTTPException(status_code=409, detail="An approved trip cannot be overwritten by a draft.")
         existing.payload_json = trip.model_dump(mode="json")
         existing.title = _derive_title(trip, body.title)
         existing.total_cost_usd = trip.total_cost_usd()
@@ -93,6 +97,7 @@ def create_super_trip(
         return SuperTripDetail.model_validate(existing)
 
     record = SuperTripRecord(
+        id=trip.super_trip_id,
         payload_json=trip.model_dump(mode="json"),
         title=_derive_title(trip, body.title),
         total_cost_usd=trip.total_cost_usd(),

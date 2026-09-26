@@ -9,6 +9,7 @@ from app.database import Base, engine
 from app import models  # noqa: F401 — register mappers
 from app.routers import (
     agents,
+    assistant,
     auth,
     capacity,
     disruptions,
@@ -64,6 +65,7 @@ def health() -> dict[str, str]:
 
 
 app.include_router(auth.router)
+app.include_router(assistant.router)
 app.include_router(providers.router)
 app.include_router(experiences.router)
 app.include_router(experiences.provider_router)
